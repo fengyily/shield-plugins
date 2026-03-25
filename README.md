@@ -38,11 +38,11 @@ User runs: shield postgres 10.0.0.20 --db-user admin --db-pass ****
 
 ## Plugins
 
-| Plugin | Service | Protocols | Default Port | Status |
-|--------|---------|-----------|:---:|--------|
-| [shield-plugin-postgres](shield-plugin-postgres/) | PostgreSQL | `postgres` `pg` `postgresql` | 5432 | Development |
-| shield-plugin-redis | Redis | `redis` | 6379 | Planned |
-| shield-plugin-sqlserver | SQL Server | `sqlserver` `mssql` | 1433 | Planned |
+| Plugin | Service | Protocols | Default Port | Docker Image | Status |
+|--------|---------|-----------|:---:|--------------|--------|
+| [shield-plugin-postgres](shield-plugin-postgres/) | PostgreSQL | `postgres` `pg` `postgresql` | 5432 | [`fengyily/shield-postgres`](https://hub.docker.com/r/fengyily/shield-postgres) | Development |
+| shield-plugin-redis | Redis | `redis` | 6379 | — | Planned |
+| shield-plugin-sqlserver | SQL Server | `sqlserver` `mssql` | 1433 | — | Planned |
 
 > The [MySQL plugin](https://github.com/fengyily/shield-cli/tree/main/plugins/mysql) is built into the main Shield CLI repo.
 
@@ -75,6 +75,60 @@ shield start
 shield plugin list              # List installed plugins
 shield plugin upgrade postgres  # Upgrade to latest release
 shield plugin remove postgres   # Uninstall
+```
+
+## Docker
+
+Each plugin also ships as a lightweight Docker image (~9 MB), providing a standalone Web UI for database management — similar to phpMyAdmin / pgAdmin, but much smaller.
+
+### PostgreSQL
+
+```bash
+docker run -d --name shield-postgres \
+  -e DB_HOST=10.0.0.20 \
+  -e DB_PORT=5432 \
+  -e DB_USER=postgres \
+  -e DB_PASS=mypass \
+  -e DB_NAME=mydb \
+  -p 8080:8080 \
+  fengyily/shield-postgres
+```
+
+Open http://localhost:8080 to manage your PostgreSQL database.
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_HOST` | `127.0.0.1` | Database host |
+| `DB_PORT` | `5432` / `3306` | Database port |
+| `DB_USER` | `postgres` / `root` | Database user |
+| `DB_PASS` | — | Database password |
+| `DB_NAME` | `postgres` / — | Default database |
+| `DB_READONLY` | `false` | Enable read-only mode (`true` or `1`) |
+| `WEB_PORT` | `8080` | Web UI listen port |
+
+### Docker Compose example
+
+```yaml
+services:
+  postgres-web:
+    image: fengyily/shield-postgres
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASS: mypass
+      DB_NAME: mydb
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: mypass
+      POSTGRES_DB: mydb
 ```
 
 ## Build from Source

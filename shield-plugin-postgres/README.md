@@ -28,6 +28,33 @@ shield plugin add postgres
 shield postgres 10.0.0.20:5432 --db-user postgres --db-pass mypass --database mydb
 ```
 
+## Docker
+
+Standalone Web UI for PostgreSQL, no Shield CLI required:
+
+```bash
+docker run -d --name shield-postgres \
+  -e DB_HOST=10.0.0.20 \
+  -e DB_PORT=5432 \
+  -e DB_USER=postgres \
+  -e DB_PASS=mypass \
+  -e DB_NAME=mydb \
+  -p 8080:8080 \
+  fengyily/shield-postgres
+```
+
+Open http://localhost:8080 — lightweight alternative to pgAdmin (~9 MB vs ~400 MB).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_HOST` | `127.0.0.1` | Database host |
+| `DB_PORT` | `5432` | Database port |
+| `DB_USER` | `postgres` | Database user |
+| `DB_PASS` | — | Database password |
+| `DB_NAME` | `postgres` | Default database |
+| `DB_READONLY` | `false` | Read-only mode |
+| `WEB_PORT` | `8080` | Web UI port |
+
 ## Standalone Test
 
 ```bash
