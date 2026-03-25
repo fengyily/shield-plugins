@@ -1,0 +1,1945 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shield PostgreSQL Client</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23336791'/%3E%3Cstop offset='100%25' stop-color='%232F5E8A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='6' fill='url(%23g)'/%3E%3Cpath d='M22 8c-1.5-2-4-3-6.5-2.8C13 5.5 11 7 10 9c-1 2-1 4.5 0 6.5.5 1 .3 2-.2 2.8-.8 1.2-1.5 2.5-1.3 4 .2 1.2 1 2 2 2.5 1 .5 2.2.3 3-.2.5-.3 1-.8 1.2-1.3.3-.8 0-1.5-.3-2.2' fill='none' stroke='white' stroke-width='1.6' stroke-linecap='round'/%3E%3Ccircle cx='17' cy='10' r='1.5' fill='white' opacity='.7'/%3E%3Cpath d='M20 12c1 1.5 1.5 3.5 1 5.5-.3 1-.8 2-1.5 2.8-.5.5-.3 1.2.2 1.5 1 .5 2 1.2 2.3 2.2.3 1-.2 2-1 2.5' fill='none' stroke='white' stroke-width='1.4' stroke-linecap='round' opacity='.7'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #ffffff;
+  --bg2: #f8f9fb;
+  --bg3: #f0f1f4;
+  --bg-hover: #e8eaef;
+  --border: #e0e2e8;
+  --border2: #d0d3da;
+  --text: #1a1d27;
+  --text2: #6b7084;
+  --text3: #9ca0b0;
+  --accent: #336791;
+  --accent2: #2F5E8A;
+  --accent-light: #eaf0f7;
+  --success: #2b9348;
+  --success-light: #e9f7ef;
+  --error: #e03131;
+  --error-light: #fff0f0;
+  --warning: #e67700;
+  --warning-light: #fff8e6;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+body.readonly-mode .write-action { display: none !important; }
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.logo { font-size: 16px; font-weight: 700; color: var(--accent); }
+.server-info { font-size: 13px; color: var(--text2); }
+.server-info .host { color: var(--text); font-weight: 500; }
+.header-right { display: flex; align-items: center; gap: 10px; }
+
+.readonly-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 500; padding: 4px 10px;
+  border-radius: 4px; user-select: none;
+}
+.readonly-badge.on { background: var(--warning-light); color: var(--warning); border: 1px solid #ffd89e; }
+.readonly-badge.off { background: var(--success-light); color: var(--success); border: 1px solid #b7e4c7; }
+
+.main { display: flex; flex: 1; overflow: hidden; }
+
+.sidebar {
+  width: 260px; background: var(--bg2); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; flex-shrink: 0;
+}
+.sidebar-toolbar {
+  padding: 8px 10px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 6px;
+}
+.sidebar-toolbar input {
+  flex: 1; padding: 5px 8px; border: 1px solid var(--border); border-radius: 4px;
+  font-size: 12px; background: var(--bg); color: var(--text); outline: none;
+}
+.sidebar-toolbar input:focus { border-color: var(--accent); }
+.sidebar-toolbar input::placeholder { color: var(--text3); }
+
+.tree-container { flex: 1; overflow-y: auto; padding: 2px 0; }
+
+.tree-node {
+  display: flex; align-items: center; padding: 5px 8px; cursor: pointer;
+  font-size: 13px; color: var(--text); transition: background 0.1s;
+  position: relative; user-select: none;
+}
+.tree-node:hover { background: var(--bg-hover); }
+.tree-node.active { background: var(--accent-light); color: var(--accent); }
+
+.tree-node .toggle {
+  width: 16px; height: 16px; display: inline-flex; align-items: center;
+  justify-content: center; font-size: 10px; color: var(--text3);
+  transition: transform 0.15s; flex-shrink: 0;
+}
+.tree-node .toggle.open { transform: rotate(90deg); }
+.tree-node .toggle.hidden { visibility: hidden; }
+
+.tree-node .node-icon {
+  width: 18px; text-align: center; font-size: 13px; flex-shrink: 0;
+  margin-right: 4px; opacity: 0.55;
+}
+.tree-node .node-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-node .node-badge {
+  font-size: 10px; color: var(--text3); margin-left: 4px; flex-shrink: 0;
+}
+.tree-node .node-actions {
+  display: none; gap: 2px; margin-left: auto; flex-shrink: 0;
+}
+.tree-node:hover .node-actions { display: flex; }
+
+.node-action-btn {
+  background: none; border: none; cursor: pointer; font-size: 13px;
+  color: var(--text3); padding: 0 3px; border-radius: 3px;
+  line-height: 1;
+}
+.node-action-btn:hover { color: var(--accent); background: var(--accent-light); }
+.node-action-btn.danger:hover { color: var(--error); background: var(--error-light); }
+
+.tree-children { padding-left: 12px; }
+.tree-children.collapsed { display: none; }
+
+.tree-node.schema-node .node-icon { color: var(--accent); }
+.tree-node.table-node .node-icon { color: var(--warning); }
+.tree-node.col-node { cursor: default; font-size: 12px; color: var(--text2); }
+.tree-node.col-node:hover { background: transparent; }
+.tree-node.idx-node { cursor: default; font-size: 12px; color: var(--text2); }
+.tree-node.idx-node:hover { background: var(--bg-hover); }
+.tree-node .col-type { font-size: 11px; color: var(--text3); margin-left: 4px; }
+
+.content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+.tab-bar {
+  display: flex; align-items: stretch; background: var(--bg2);
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+  overflow-x: auto; overflow-y: hidden; min-height: 33px;
+}
+.tab-bar::-webkit-scrollbar { height: 0; }
+.tab-bar:empty { display: none; }
+
+.tab-item {
+  display: flex; align-items: center; gap: 6px; padding: 6px 12px;
+  font-size: 12px; color: var(--text2); cursor: pointer;
+  border-right: 1px solid var(--border); white-space: nowrap;
+  transition: background 0.1s; flex-shrink: 0; max-width: 180px;
+  position: relative;
+}
+.tab-item:hover { background: var(--bg-hover); color: var(--text); }
+.tab-item.active {
+  background: var(--bg); color: var(--accent); font-weight: 500;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.tab-item .tab-icon { font-size: 11px; opacity: 0.5; flex-shrink: 0; }
+.tab-item .tab-label {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tab-item .tab-close {
+  display: none; background: none; border: none; cursor: pointer;
+  font-size: 14px; color: var(--text3); padding: 0 2px; line-height: 1;
+  border-radius: 3px; flex-shrink: 0; margin-left: auto;
+}
+.tab-item:hover .tab-close { display: inline-flex; }
+.tab-item .tab-close:hover { color: var(--error); background: var(--error-light); }
+
+.editor-area {
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  flex-shrink: 0; background: var(--bg);
+}
+textarea.sql-input {
+  width: 100%; min-height: 80px; max-height: 200px; padding: 10px 12px;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: 'SF Mono','Fira Code','JetBrains Mono','Menlo',monospace;
+  font-size: 13px; line-height: 1.5; resize: vertical; outline: none;
+}
+textarea.sql-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(51,103,145,0.1); }
+
+.editor-actions {
+  display: flex; align-items: center; justify-content: space-between; margin-top: 8px;
+}
+.editor-actions-left { display: flex; align-items: center; gap: 8px; }
+
+.btn {
+  padding: 6px 14px; border: 1px solid transparent; border-radius: 5px;
+  font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.btn-primary { background: var(--accent); color: white; border-color: var(--accent2); }
+.btn-primary:hover { background: var(--accent2); }
+.btn-primary:disabled { opacity: 0.5; cursor: default; }
+.btn-secondary { background: var(--bg); color: var(--text2); border-color: var(--border); }
+.btn-secondary:hover { background: var(--bg3); color: var(--text); }
+.btn-danger { background: var(--error); color: white; border-color: var(--error); }
+.btn-danger:hover { background: #c92a2a; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+
+.shortcut-hint { font-size: 12px; color: var(--text3); }
+.shortcut-hint kbd {
+  background: var(--bg3); padding: 1px 5px; border-radius: 3px;
+  border: 1px solid var(--border); font-family: inherit; font-size: 11px; color: var(--text2);
+}
+
+.result-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+
+.result-toolbar {
+  padding: 6px 16px; font-size: 12px; color: var(--text2);
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0; z-index: 10;
+}
+.result-toolbar-left { display: flex; align-items: center; gap: 12px; }
+.result-toolbar-right { display: flex; align-items: center; gap: 6px; }
+.result-toolbar .count { color: var(--success); font-weight: 500; }
+.result-toolbar .duration { color: var(--text3); }
+.result-toolbar .error { color: var(--error); }
+
+.result-scroll { flex: 1; overflow: auto; }
+
+table.result-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.result-table th {
+  position: sticky; top: 0; z-index: 5; background: var(--bg2);
+  padding: 7px 12px; text-align: left; font-weight: 600; font-size: 12px;
+  color: var(--text2); border-bottom: 1px solid var(--border);
+  white-space: nowrap; cursor: pointer; user-select: none;
+}
+table.result-table th:hover { color: var(--text); background: var(--bg3); }
+table.result-table th .sort-icon { margin-left: 3px; font-size: 10px; opacity: 0.4; }
+table.result-table th .sort-icon.active { opacity: 1; color: var(--accent); }
+
+table.result-table td {
+  padding: 5px 12px; border-bottom: 1px solid var(--border);
+  max-width: 300px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; cursor: pointer;
+}
+table.result-table td:hover { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+table.result-table tbody tr:nth-child(even) td { background: var(--bg2); }
+table.result-table tbody tr:hover td { background: var(--accent-light); }
+
+table.result-table th.th-actions,
+table.result-table td.td-actions {
+  position: sticky; right: 0; z-index: 3;
+  cursor: default; max-width: none; white-space: nowrap; width: 1%;
+  background: var(--bg);
+  box-shadow: -3px 0 6px rgba(0,0,0,0.06);
+}
+table.result-table th.th-actions { background: var(--bg2); z-index: 6; }
+table.result-table tbody tr:nth-child(even) td.td-actions { background: var(--bg2); }
+table.result-table tbody tr:hover td.td-actions { background: var(--accent-light); }
+table.result-table td.td-actions:hover { outline: none; }
+
+.null-value { color: var(--text3); font-style: italic; }
+
+/* Cell detail viewer */
+.cell-viewer-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.35); z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+}
+.cell-viewer {
+  background: var(--bg); border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  width: 640px; max-width: 90vw; max-height: 80vh;
+  display: flex; flex-direction: column;
+}
+.cell-viewer-header {
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+  flex-shrink: 0;
+}
+.cell-viewer-header .cv-title { font-weight: 600; font-size: 13px; color: var(--text2); }
+.cell-viewer-header .cv-actions { display: flex; gap: 6px; align-items: center; }
+.cell-viewer-body {
+  padding: 16px; overflow: auto; flex: 1;
+  font-family: 'SF Mono','Fira Code','JetBrains Mono','Menlo',monospace;
+  font-size: 13px; line-height: 1.6; white-space: pre-wrap;
+  word-break: break-all; color: var(--text); tab-size: 2;
+}
+
+.row-actions { display: flex; gap: 3px; align-items: center; }
+.row-action-btn {
+  background: none; border: 1px solid transparent; border-radius: 4px;
+  cursor: pointer; padding: 3px 5px; transition: all 0.12s;
+  display: inline-flex; align-items: center; justify-content: center;
+  line-height: 0;
+}
+.row-action-btn svg { width: 14px; height: 14px; }
+.row-action-btn.btn-copy-row { color: var(--accent); }
+.row-action-btn.btn-copy-row:hover { background: var(--accent-light); border-color: var(--accent); }
+.row-action-btn.btn-edit { color: var(--warning); }
+.row-action-btn.btn-edit:hover { background: var(--warning-light); border-color: var(--warning); }
+.row-action-btn.btn-delete { color: var(--error); }
+.row-action-btn.btn-delete:hover { background: var(--error-light); border-color: var(--error); }
+
+.cell-copied { animation: cellFlash 0.3s ease; }
+@keyframes cellFlash {
+  0% { background: var(--accent); color: white; }
+  100% { background: inherit; color: inherit; }
+}
+
+.schema-panel { padding: 0; }
+.schema-panel h3 { font-size: 14px; padding: 14px 16px 0; color: var(--text2); }
+
+.schema-tabs {
+  display: flex; gap: 0; padding: 12px 16px 0; border-bottom: 1px solid var(--border);
+}
+.schema-tab {
+  padding: 8px 16px; font-size: 13px; font-weight: 500; cursor: pointer;
+  border-bottom: 2px solid transparent; color: var(--text2); transition: all 0.15s;
+}
+.schema-tab:hover { color: var(--text); }
+.schema-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.schema-tab-content { padding: 12px 16px; }
+.schema-actions-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+table.schema-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.schema-table th {
+  background: var(--bg2); padding: 7px 12px; text-align: left;
+  font-weight: 600; font-size: 12px; color: var(--text2);
+  border-bottom: 1px solid var(--border);
+}
+table.schema-table td { padding: 5px 12px; border-bottom: 1px solid var(--border); }
+table.schema-table tbody tr:nth-child(even) td { background: var(--bg2); }
+table.schema-table tbody tr:hover td { background: var(--accent-light); }
+
+.badge { font-size: 11px; padding: 2px 6px; border-radius: 3px; font-weight: 500; }
+.badge-pri { background: var(--accent-light); color: var(--accent); }
+.badge-uni { background: var(--success-light); color: var(--success); }
+.badge-idx { background: var(--bg3); color: var(--text2); }
+
+.schema-table .col-actions {
+  display: flex; gap: 4px; justify-content: flex-end;
+}
+.schema-table .col-action-btn {
+  background: none; border: none; cursor: pointer; color: var(--text3);
+  font-size: 13px; padding: 2px 4px; border-radius: 3px;
+}
+.schema-table .col-action-btn:hover { color: var(--accent); background: var(--accent-light); }
+.schema-table .col-action-btn.danger:hover { color: var(--error); background: var(--error-light); }
+
+.modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.35); z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+}
+.modal {
+  background: var(--bg); border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  width: 520px; max-width: 90vw; max-height: 80vh;
+  display: flex; flex-direction: column;
+}
+.modal-header {
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+  font-weight: 600; font-size: 14px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.modal-header .modal-close {
+  background: none; border: none; font-size: 18px; cursor: pointer;
+  color: var(--text2); padding: 0 4px;
+}
+.modal-header .modal-close:hover { color: var(--text); }
+.modal-body { padding: 16px 18px; overflow-y: auto; flex: 1; }
+.modal-footer {
+  padding: 12px 18px; border-top: 1px solid var(--border);
+  display: flex; justify-content: flex-end; gap: 8px;
+}
+
+.form-field { margin-bottom: 12px; }
+.form-field label {
+  display: block; font-size: 12px; font-weight: 500;
+  color: var(--text2); margin-bottom: 4px;
+}
+.form-field input, .form-field select, .form-field textarea {
+  width: 100%; padding: 7px 10px; border: 1px solid var(--border);
+  border-radius: 5px; font-size: 13px; color: var(--text);
+  background: var(--bg); outline: none;
+  font-family: 'SF Mono','Fira Code',monospace;
+}
+.form-field input:focus, .form-field select:focus {
+  border-color: var(--accent); box-shadow: 0 0 0 2px rgba(51,103,145,0.1);
+}
+.form-field input:read-only { background: var(--bg2); color: var(--text2); }
+.form-field .null-toggle {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; color: var(--text3); margin-top: 3px; cursor: pointer;
+}
+.form-field .hint { font-size: 11px; color: var(--text3); margin-top: 3px; }
+
+.form-row { display: flex; gap: 10px; }
+.form-row .form-field { flex: 1; }
+
+.confirm-input {
+  margin-top: 10px; padding: 7px 10px; width: 100%;
+  border: 1px solid var(--border); border-radius: 5px; font-size: 13px;
+  outline: none; text-align: center;
+}
+.confirm-input:focus { border-color: var(--error); }
+
+.empty-state {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; height: 100%; color: var(--text3); gap: 8px;
+}
+.empty-state .empty-icon { font-size: 40px; opacity: 0.25; }
+.empty-state p { font-size: 14px; }
+
+.toast {
+  position: fixed; bottom: 20px; right: 20px; padding: 8px 16px;
+  background: var(--text); color: var(--bg); border-radius: 6px;
+  font-size: 13px; z-index: 1000; opacity: 0; transform: translateY(10px);
+  transition: all 0.2s; pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+
+.loading {
+  display: inline-block; width: 12px; height: 12px;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">Shield PostgreSQL</div>
+    <div class="server-info" id="serverInfo">Connecting...</div>
+  </div>
+  <div class="header-right">
+    <div class="readonly-badge on" id="readonlyBadge">
+      <span id="readonlyIcon">&#128274;</span>
+      <span id="readonlyLabel">Read-Only</span>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="sidebar-toolbar">
+      <input type="text" id="treeFilter" placeholder="Filter..." oninput="filterTree()">
+      <button class="btn btn-sm btn-primary write-action" onclick="showCreateSchemaModal()" title="New Schema">+</button>
+    </div>
+    <div class="tree-container" id="sidebarTree"></div>
+  </div>
+
+  <div class="content">
+    <div class="tab-bar" id="tabBar"></div>
+    <div class="editor-area">
+      <textarea class="sql-input" id="sqlInput" placeholder="Enter SQL query..." spellcheck="false">SELECT 1;</textarea>
+      <div class="editor-actions">
+        <div class="editor-actions-left">
+          <button class="btn btn-primary" id="runBtn" onclick="executeQuery()">&#9654; Run</button>
+          <button class="btn btn-secondary" onclick="clearResults()">Clear</button>
+        </div>
+        <div class="shortcut-hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> to run</div>
+      </div>
+    </div>
+    <div class="result-area" id="resultArea">
+      <div class="empty-state">
+        <div class="empty-icon">&#9741;</div>
+        <p>Run a query to see results</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+//  State
+// ══════════════════════════════════════════════
+let readOnly = true;
+let currentSchema = 'public';
+
+let treeData = {};
+let treeFilter = '';
+let schemaCache = {};
+
+let tabs = [];
+let activeTabId = null;
+let tabIdSeq = 0;
+
+function createTab(title, icon, type) {
+  const id = ++tabIdSeq;
+  const tab = {
+    id, title, icon: icon || '&#9776;', type: type || 'query',
+    sql: '', resultHtml: '', lastResult: null,
+    sortCol: null, sortAsc: true, currentTableContext: null,
+    scrollTop: 0, scrollLeft: 0,
+  };
+  tabs.push(tab);
+  return tab;
+}
+
+function getActiveTab() {
+  return tabs.find(t => t.id === activeTabId) || null;
+}
+
+function saveActiveTabState() {
+  const tab = getActiveTab();
+  if (!tab) return;
+  tab.sql = document.getElementById('sqlInput').value;
+  tab.resultHtml = document.getElementById('resultArea').innerHTML;
+  const scroll = document.querySelector('.result-scroll');
+  if (scroll) { tab.scrollTop = scroll.scrollTop; tab.scrollLeft = scroll.scrollLeft; }
+}
+
+function restoreTabState(tab) {
+  document.getElementById('sqlInput').value = tab.sql;
+  document.getElementById('resultArea').innerHTML = tab.resultHtml || `
+    <div class="empty-state"><div class="empty-icon">&#9741;</div><p>Run a query to see results</p></div>`;
+  requestAnimationFrame(() => {
+    const scroll = document.querySelector('.result-scroll');
+    if (scroll) { scroll.scrollTop = tab.scrollTop; scroll.scrollLeft = tab.scrollLeft; }
+  });
+}
+
+function switchTab(id) {
+  if (id === activeTabId) return;
+  saveActiveTabState();
+  activeTabId = id;
+  const tab = getActiveTab();
+  if (tab) restoreTabState(tab);
+  renderTabBar();
+}
+
+function closeTab(id) {
+  const idx = tabs.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  tabs.splice(idx, 1);
+  if (activeTabId === id) {
+    const next = tabs[Math.min(idx, tabs.length - 1)];
+    activeTabId = next ? next.id : null;
+    if (next) restoreTabState(next);
+    else {
+      document.getElementById('sqlInput').value = 'SELECT 1;';
+      document.getElementById('resultArea').innerHTML = `
+        <div class="empty-state"><div class="empty-icon">&#9741;</div><p>Run a query to see results</p></div>`;
+    }
+  }
+  renderTabBar();
+}
+
+function openOrFocusTab(title, icon, type, setupFn) {
+  const existing = tabs.find(t => t.title === title && t.type === type);
+  if (existing) { switchTab(existing.id); if (setupFn) setupFn(existing); return existing; }
+  saveActiveTabState();
+  const tab = createTab(title, icon, type);
+  activeTabId = tab.id;
+  renderTabBar();
+  if (setupFn) setupFn(tab);
+  return tab;
+}
+
+function renderTabBar() {
+  const bar = document.getElementById('tabBar');
+  if (tabs.length === 0) { bar.innerHTML = ''; return; }
+  bar.innerHTML = tabs.map(t => `
+    <div class="tab-item${t.id === activeTabId ? ' active' : ''}" onclick="switchTab(${t.id})" title="${escAttr(t.title)}">
+      <span class="tab-icon">${t.icon}</span>
+      <span class="tab-label">${esc(t.title)}</span>
+      <button class="tab-close" onclick="event.stopPropagation();closeTab(${t.id})">&times;</button>
+    </div>
+  `).join('');
+}
+
+function getLastResult() { const t = getActiveTab(); return t ? t.lastResult : null; }
+function setLastResult(v) { const t = getActiveTab(); if (t) t.lastResult = v; }
+function getSortCol() { const t = getActiveTab(); return t ? t.sortCol : null; }
+function setSortCol(v) { const t = getActiveTab(); if (t) t.sortCol = v; }
+function getSortAsc() { const t = getActiveTab(); return t ? t.sortAsc : true; }
+function setSortAsc(v) { const t = getActiveTab(); if (t) t.sortAsc = v; }
+function getTableCtx() { const t = getActiveTab(); return t ? t.currentTableContext : null; }
+function setTableCtx(v) { const t = getActiveTab(); if (t) t.currentTableContext = v; }
+
+// ══════════════════════════════════════════════
+//  Init
+// ══════════════════════════════════════════════
+async function init() {
+  try {
+    const resp = await fetch('/api/info');
+    const data = await resp.json();
+    if (data.code === 200) {
+      const info = data.data;
+      document.getElementById('serverInfo').innerHTML =
+        `<span class="host">${esc(info.host)}</span> &middot; ${esc(info.database)} &middot; ${esc(info.user)}`;
+      readOnly = !!info.readonly;
+      const badge = document.getElementById('readonlyBadge');
+      if (readOnly) {
+        badge.className = 'readonly-badge on';
+        document.getElementById('readonlyIcon').innerHTML = '&#128274;';
+        document.getElementById('readonlyLabel').textContent = 'Read-Only';
+        document.body.classList.add('readonly-mode');
+      } else {
+        badge.className = 'readonly-badge off';
+        document.getElementById('readonlyIcon').innerHTML = '&#128275;';
+        document.getElementById('readonlyLabel').textContent = 'Read-Write';
+        document.body.classList.remove('readonly-mode');
+      }
+    }
+  } catch (e) {
+    document.getElementById('serverInfo').textContent = 'Connection error';
+  }
+  await loadSchemas();
+}
+
+// ══════════════════════════════════════════════
+//  Sidebar Tree (Schema → Table → Columns/Indexes)
+// ══════════════════════════════════════════════
+async function loadSchemas() {
+  const resp = await fetch('/api/schemas');
+  const data = await resp.json();
+  if (data.code !== 200) return;
+
+  const oldTree = treeData;
+  treeData = {};
+  for (const s of data.data) {
+    treeData[s] = oldTree[s] || { expanded: false, tables: null };
+  }
+  // Auto-expand public schema
+  if (treeData['public']) {
+    treeData['public'].expanded = true;
+    if (!treeData['public'].tables) await loadTables('public');
+  }
+  renderTree();
+}
+
+async function loadTables(schema) {
+  const resp = await fetch(`/api/tables?schema=${encodeURIComponent(schema)}`);
+  const data = await resp.json();
+  if (data.code !== 200) return;
+
+  const existing = treeData[schema]?.tables || {};
+  const tables = {};
+  for (const t of (data.data || [])) {
+    tables[t] = existing[t] || { expanded: false, columns: null, indexes: null };
+  }
+  if (treeData[schema]) treeData[schema].tables = tables;
+}
+
+async function loadTableDetails(schema, table) {
+  const [colResp, idxResp] = await Promise.all([
+    fetch(`/api/columns?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}`),
+    fetch(`/api/indexes?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}`)
+  ]);
+  const colData = await colResp.json();
+  const idxData = await idxResp.json();
+
+  const node = treeData[schema]?.tables?.[table];
+  if (node) {
+    node.columns = colData.code === 200 ? colData.data : [];
+    node.indexes = idxData.code === 200 ? idxData.data : [];
+    schemaCache[`${schema}.${table}`] = node.columns;
+  }
+}
+
+function filterTree() {
+  treeFilter = document.getElementById('treeFilter').value.toLowerCase();
+  renderTree();
+}
+
+function renderTree() {
+  const container = document.getElementById('sidebarTree');
+  container.innerHTML = '';
+
+  for (const schema of Object.keys(treeData)) {
+    const schemaState = treeData[schema];
+    const tables = schemaState.tables || {};
+    const tableNames = Object.keys(tables);
+
+    if (treeFilter) {
+      const schemaMatch = schema.toLowerCase().includes(treeFilter);
+      const tableMatch = tableNames.some(t => t.toLowerCase().includes(treeFilter));
+      if (!schemaMatch && !tableMatch) continue;
+    }
+
+    // Schema node
+    const schemaNode = document.createElement('div');
+    schemaNode.className = `tree-node schema-node${schema === currentSchema ? ' active' : ''}`;
+    schemaNode.innerHTML = `
+      <span class="toggle ${schemaState.expanded ? 'open' : ''}">&#9654;</span>
+      <span class="node-icon">&#128451;</span>
+      <span class="node-label">${esc(schema)}</span>
+      ${tableNames.length ? `<span class="node-badge">${tableNames.length}</span>` : ''}
+      <span class="node-actions">
+        <button class="node-action-btn write-action" onclick="event.stopPropagation();showCreateTableModal('${escAttr(schema)}')" title="New Table">+</button>
+        <button class="node-action-btn danger write-action" onclick="event.stopPropagation();dropSchema('${escAttr(schema)}')" title="Drop Schema">&#10005;</button>
+      </span>
+    `;
+    schemaNode.onclick = () => toggleSchema(schema);
+    container.appendChild(schemaNode);
+
+    if (schemaState.expanded) {
+      const childrenDiv = document.createElement('div');
+      childrenDiv.className = 'tree-children';
+
+      for (const table of tableNames) {
+        if (treeFilter && !table.toLowerCase().includes(treeFilter) && !schema.toLowerCase().includes(treeFilter)) continue;
+
+        const tState = tables[table];
+        const tableNode = document.createElement('div');
+        tableNode.className = 'tree-node table-node';
+        tableNode.innerHTML = `
+          <span class="toggle ${tState.expanded ? 'open' : ''}">&#9654;</span>
+          <span class="node-icon">&#9638;</span>
+          <span class="node-label">${esc(table)}</span>
+          <span class="node-actions">
+            <button class="node-action-btn" onclick="event.stopPropagation();viewTableData('${escAttr(schema)}','${escAttr(table)}')" title="View Data">&#9776;</button>
+            <button class="node-action-btn" onclick="event.stopPropagation();showStructPanel('${escAttr(schema)}','${escAttr(table)}')" title="View Structure">&#9881;</button>
+            <button class="node-action-btn danger write-action" onclick="event.stopPropagation();dropTable('${escAttr(schema)}','${escAttr(table)}')" title="Drop Table">&#10005;</button>
+          </span>
+        `;
+        tableNode.onclick = () => toggleTable(schema, table);
+        childrenDiv.appendChild(tableNode);
+
+        if (tState.expanded && tState.columns) {
+          const leaves = document.createElement('div');
+          leaves.className = 'tree-children';
+
+          for (const col of tState.columns) {
+            const colNode = document.createElement('div');
+            colNode.className = 'tree-node col-node';
+            let keyIcon = '';
+            if (col.key === 'PRI') keyIcon = '<span class="badge badge-pri" style="font-size:9px;padding:1px 4px;margin-right:3px">PK</span>';
+            else if (col.key === 'UNI') keyIcon = '<span class="badge badge-uni" style="font-size:9px;padding:1px 4px;margin-right:3px">UQ</span>';
+            colNode.innerHTML = `
+              <span class="toggle hidden">&#9654;</span>
+              <span class="node-icon" style="font-size:11px">&#9679;</span>
+              ${keyIcon}<span class="node-label">${esc(col.field)}</span>
+              <span class="col-type">${esc(col.type)}${col.length ? '(' + esc(col.length) + ')' : ''}</span>
+            `;
+            leaves.appendChild(colNode);
+          }
+
+          // Indexes
+          const indexes = tState.indexes || [];
+          if (indexes.length > 0) {
+            const idxHeader = document.createElement('div');
+            idxHeader.className = 'tree-node col-node';
+            idxHeader.innerHTML = `<span class="toggle hidden">&#9654;</span><span class="node-icon" style="font-size:11px">&#128273;</span><span class="node-label" style="font-weight:600;color:var(--text3)">Indexes (${indexes.length})</span>`;
+            leaves.appendChild(idxHeader);
+
+            for (const idx of indexes) {
+              const idxNode = document.createElement('div');
+              idxNode.className = 'tree-node idx-node';
+              const uniqueTag = idx.unique ? '<span class="badge badge-uni" style="font-size:9px;padding:1px 4px;margin-right:3px">UQ</span>' : '';
+              const primaryTag = idx.primary ? '<span class="badge badge-pri" style="font-size:9px;padding:1px 4px;margin-right:3px">PK</span>' : '';
+              idxNode.innerHTML = `
+                <span class="toggle hidden">&#9654;</span>
+                <span class="node-icon" style="font-size:10px">&#9656;</span>
+                ${primaryTag}${uniqueTag}<span class="node-label">${esc(idx.name)}</span>
+                <span class="col-type">(${esc(idx.columns)})</span>
+                <span class="node-actions">
+                  <button class="node-action-btn danger write-action" onclick="event.stopPropagation();dropIndex('${escAttr(schema)}','${escAttr(table)}','${escAttr(idx.name)}')" title="Drop Index">&#10005;</button>
+                </span>
+              `;
+              leaves.appendChild(idxNode);
+            }
+          }
+
+          childrenDiv.appendChild(leaves);
+        }
+      }
+      container.appendChild(childrenDiv);
+    }
+  }
+}
+
+async function toggleSchema(schema) {
+  const state = treeData[schema];
+  if (!state) return;
+
+  if (!state.expanded) {
+    state.expanded = true;
+    currentSchema = schema;
+    if (!state.tables) await loadTables(schema);
+  } else {
+    state.expanded = false;
+  }
+  renderTree();
+}
+
+async function toggleTable(schema, table) {
+  const state = treeData[schema]?.tables?.[table];
+  if (!state) return;
+
+  if (!state.expanded) {
+    state.expanded = true;
+    if (!state.columns) await loadTableDetails(schema, table);
+  } else {
+    state.expanded = false;
+  }
+  renderTree();
+}
+
+// ══════════════════════════════════════════════
+//  Schema Management
+// ══════════════════════════════════════════════
+function showCreateSchemaModal() {
+  showModal({
+    title: 'Create Schema',
+    body: `
+      <div class="form-field">
+        <label>Schema Name</label>
+        <input type="text" id="modalSchemaName" placeholder="my_schema" autofocus>
+      </div>
+    `,
+    confirmText: 'Create',
+    onConfirm: async () => {
+      const name = document.getElementById('modalSchemaName').value.trim();
+      if (!name) { showToast('Please enter a schema name'); return false; }
+      const sql = `CREATE SCHEMA ${quoteId(name)}`;
+      const ok = await execSQL(sql);
+      if (ok) { showToast('Schema created'); await loadSchemas(); }
+      return ok;
+    }
+  });
+}
+
+function dropSchema(schema) {
+  showDangerConfirm({
+    title: 'Drop Schema',
+    message: `Drop schema <strong>${esc(schema)}</strong>?`,
+    detail: 'This will permanently delete all tables and data in this schema.',
+    confirmWord: schema,
+    onConfirm: async () => {
+      const sql = `DROP SCHEMA ${quoteId(schema)} CASCADE`;
+      const ok = await execSQL(sql);
+      if (ok) {
+        showToast('Schema dropped');
+        if (currentSchema === schema) currentSchema = 'public';
+        await loadSchemas();
+      }
+      return ok;
+    }
+  });
+}
+
+// ══════════════════════════════════════════════
+//  Table Management
+// ══════════════════════════════════════════════
+const COL_TYPES = [
+  { group: 'Integer', items: ['INTEGER','BIGINT','SMALLINT','SERIAL','BIGSERIAL'] },
+  { group: 'Numeric', items: ['NUMERIC','REAL','DOUBLE PRECISION'] },
+  { group: 'String', items: ['VARCHAR','CHAR','TEXT'] },
+  { group: 'Date/Time', items: ['TIMESTAMP','TIMESTAMPTZ','DATE','TIME','INTERVAL'] },
+  { group: 'Other', items: ['BOOLEAN','JSON','JSONB','UUID','BYTEA','INET','CIDR','MACADDR','ARRAY'] },
+];
+const TYPES_NEED_LENGTH = ['VARCHAR','CHAR'];
+const TYPES_NEED_PRECISION = ['NUMERIC'];
+const LENGTH_DEFAULTS = { VARCHAR: '255', CHAR: '50', NUMERIC: '10,2' };
+
+function buildTypeSelectOptions(selectedType) {
+  const base = selectedType ? selectedType.replace(/\(.*/, '').toUpperCase() : 'VARCHAR';
+  let html = '';
+  for (const g of COL_TYPES) {
+    html += `<optgroup label="${g.group}">`;
+    for (const t of g.items) {
+      html += `<option value="${t}" ${t === base ? 'selected' : ''}>${t}</option>`;
+    }
+    html += '</optgroup>';
+  }
+  html += `<option value="CUSTOM" ${!COL_TYPES.some(g => g.items.includes(base)) ? 'selected' : ''}>Custom...</option>`;
+  return html;
+}
+
+function typeNeedsLength(t) { return TYPES_NEED_LENGTH.includes(t) || TYPES_NEED_PRECISION.includes(t); }
+
+let _createTableRows = [];
+
+function showCreateTableModal(schema) {
+  _createTableRows = [
+    { name: 'id', type: 'BIGSERIAL', length: '', nullable: false, defaultVal: '', pk: true },
+  ];
+
+  showModal({
+    title: `Create Table — ${schema}`,
+    width: '680px',
+    body: buildCreateTableBody(),
+    confirmText: 'Create',
+    onConfirm: async () => {
+      const name = document.getElementById('modalTableName').value.trim();
+      if (!name) { showToast('Please enter a table name'); return false; }
+      if (_createTableRows.length === 0) { showToast('Add at least one column'); return false; }
+
+      const colDefs = [];
+      const pks = [];
+      for (const r of _createTableRows) {
+        if (!r.name.trim()) { showToast('Column name cannot be empty'); return false; }
+        let def = `${quoteId(r.name)} ${buildTypeStr(r)}`;
+        if (!['SERIAL','BIGSERIAL','SMALLSERIAL'].includes(r.type)) {
+          def += r.nullable ? ' NULL' : ' NOT NULL';
+        }
+        if (r.defaultVal) def += ` DEFAULT ${r.defaultVal}`;
+        colDefs.push(def);
+        if (r.pk) pks.push(quoteId(r.name));
+      }
+      if (pks.length) colDefs.push(`PRIMARY KEY (${pks.join(', ')})`);
+
+      const sql = `CREATE TABLE ${quoteId(schema)}.${quoteId(name)} (\n  ${colDefs.join(',\n  ')}\n)`;
+      const ok = await execSQL(sql);
+      if (ok) {
+        showToast('Table created');
+        await loadTables(schema);
+        renderTree();
+      }
+      return ok;
+    }
+  });
+}
+
+function buildTypeStr(row) {
+  const t = row.type;
+  if (t === 'CUSTOM') return row.customType || 'TEXT';
+  if (typeNeedsLength(t) && row.length) return `${t}(${row.length})`;
+  return t;
+}
+
+function buildCreateTableBody() {
+  let rowsHtml = '';
+  for (let i = 0; i < _createTableRows.length; i++) {
+    rowsHtml += buildCreateTableRowHtml(i);
+  }
+
+  return `
+    <div class="form-field" style="margin-bottom:12px">
+      <label>Table Name</label>
+      <input type="text" id="modalTableName" placeholder="my_table" autofocus>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <label style="font-size:12px;font-weight:600;color:var(--text2)">Columns</label>
+      <button class="btn btn-sm btn-secondary" onclick="addCreateTableRow()">+ Add Column</button>
+    </div>
+    <div id="createTableRows" style="border:1px solid var(--border);border-radius:6px;overflow:hidden">
+      <div style="display:flex;background:var(--bg2);border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--text2);padding:6px 0">
+        <span style="width:28px;text-align:center">PK</span>
+        <span style="flex:2;padding:0 4px">Name</span>
+        <span style="flex:2;padding:0 4px">Type</span>
+        <span style="flex:1;padding:0 4px">Length</span>
+        <span style="width:44px;text-align:center">NULL</span>
+        <span style="flex:1;padding:0 4px">Default</span>
+        <span style="width:32px"></span>
+      </div>
+      ${rowsHtml}
+    </div>
+  `;
+}
+
+function buildCreateTableRowHtml(i) {
+  const r = _createTableRows[i];
+  const showLen = typeNeedsLength(r.type);
+  return `<div class="ct-row" style="display:flex;align-items:center;border-bottom:1px solid var(--border);padding:4px 0;font-size:12px${i % 2 === 1 ? ';background:var(--bg2)' : ''}" data-idx="${i}">
+    <span style="width:28px;text-align:center"><input type="checkbox" ${r.pk ? 'checked' : ''} onchange="ctRowChange(${i},'pk',this.checked)"></span>
+    <span style="flex:2;padding:0 3px"><input style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:3px;font-size:12px;font-family:monospace" value="${escAttr(r.name)}" onchange="ctRowChange(${i},'name',this.value)" placeholder="column"></span>
+    <span style="flex:2;padding:0 3px"><select style="width:100%;padding:4px 4px;border:1px solid var(--border);border-radius:3px;font-size:12px" onchange="ctRowChange(${i},'type',this.value)">${buildTypeSelectOptions(r.type)}</select></span>
+    <span style="flex:1;padding:0 3px"><input style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:3px;font-size:12px;${showLen ? '' : 'opacity:0.3'}" value="${escAttr(r.length)}" onchange="ctRowChange(${i},'length',this.value)" placeholder="${LENGTH_DEFAULTS[r.type]||''}" ${showLen ? '' : 'disabled'}></span>
+    <span style="width:44px;text-align:center"><input type="checkbox" ${r.nullable ? 'checked' : ''} onchange="ctRowChange(${i},'nullable',this.checked)"></span>
+    <span style="flex:1;padding:0 3px"><input style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:3px;font-size:12px" value="${escAttr(r.defaultVal)}" onchange="ctRowChange(${i},'defaultVal',this.value)" placeholder="none"></span>
+    <span style="width:32px;text-align:center"><button class="node-action-btn danger" onclick="removeCreateTableRow(${i})" title="Remove" style="font-size:14px">&#10005;</button></span>
+  </div>`;
+}
+
+function ctRowChange(i, field, value) {
+  _createTableRows[i][field] = value;
+  if (field === 'type') {
+    _createTableRows[i].length = LENGTH_DEFAULTS[value] || '';
+    refreshCreateTableRows();
+  }
+}
+
+function addCreateTableRow() {
+  _createTableRows.push({ name: '', type: 'VARCHAR', length: '255', nullable: true, defaultVal: '', pk: false });
+  refreshCreateTableRows();
+}
+
+function removeCreateTableRow(i) {
+  _createTableRows.splice(i, 1);
+  refreshCreateTableRows();
+}
+
+function refreshCreateTableRows() {
+  const container = document.getElementById('createTableRows');
+  if (!container) return;
+  const tableName = document.getElementById('modalTableName')?.value || '';
+  let rowsHtml = '';
+  for (let i = 0; i < _createTableRows.length; i++) {
+    rowsHtml += buildCreateTableRowHtml(i);
+  }
+  const header = container.firstElementChild;
+  container.innerHTML = '';
+  container.appendChild(header);
+  container.insertAdjacentHTML('beforeend', rowsHtml);
+  const nameInput = document.getElementById('modalTableName');
+  if (nameInput) nameInput.value = tableName;
+}
+
+function dropTable(schema, table) {
+  showDangerConfirm({
+    title: 'Drop Table',
+    message: `Drop table <strong>${esc(schema)}.${esc(table)}</strong>?`,
+    detail: 'This will permanently delete all data in this table.',
+    confirmWord: table,
+    onConfirm: async () => {
+      const sql = `DROP TABLE ${quoteId(schema)}.${quoteId(table)}`;
+      const ok = await execSQL(sql);
+      if (ok) {
+        showToast('Table dropped');
+        await loadTables(schema);
+        renderTree();
+      }
+      return ok;
+    }
+  });
+}
+
+// ══════════════════════════════════════════════
+//  View Table Data
+// ══════════════════════════════════════════════
+async function viewTableData(schema, table) {
+  currentSchema = schema;
+  openOrFocusTab(`${table}`, '&#9776;', `data:${schema}.${table}`, async (tab) => {
+    const key = `${schema}.${table}`;
+    if (!schemaCache[key]) {
+      const resp = await fetch(`/api/columns?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}`);
+      const data = await resp.json();
+      if (data.code === 200) schemaCache[key] = data.data;
+    }
+    const cols = schemaCache[key] || [];
+    tab.currentTableContext = {
+      schema, table,
+      primaryKeys: cols.filter(c => c.key === 'PRI').map(c => c.field),
+      columns: cols.map(c => c.field)
+    };
+    tab.sql = `SELECT * FROM ${quoteId(schema)}.${quoteId(table)} LIMIT 100;`;
+    document.getElementById('sqlInput').value = tab.sql;
+    document.getElementById('resultArea').innerHTML = '';
+    await executeQuery();
+  });
+}
+
+// ══════════════════════════════════════════════
+//  Structure Panel (Columns + Indexes)
+// ══════════════════════════════════════════════
+async function showStructPanel(schema, table) {
+  currentSchema = schema;
+  openOrFocusTab(`${table} [struct]`, '&#9881;', `schema:${schema}.${table}`, async () => {
+    const area = document.getElementById('resultArea');
+    area.innerHTML = '<div class="result-toolbar"><div class="result-toolbar-left"><span class="loading"></span> Loading...</div></div>';
+
+    const [colResp, idxResp] = await Promise.all([
+      fetch(`/api/columns?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}`),
+      fetch(`/api/indexes?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}`)
+    ]);
+    const colData = await colResp.json();
+    const idxData = await idxResp.json();
+
+    const columns = colData.code === 200 ? colData.data : [];
+    const indexes = idxData.code === 200 ? idxData.data : [];
+
+    schemaCache[`${schema}.${table}`] = columns;
+
+    if (treeData[schema]?.tables?.[table]) {
+      treeData[schema].tables[table].columns = columns;
+      treeData[schema].tables[table].indexes = indexes;
+    }
+
+    renderStructPanel(schema, table, columns, indexes, 'columns');
+  });
+}
+
+function renderStructPanel(schema, table, columns, indexes, activeTab) {
+  const area = document.getElementById('resultArea');
+
+  let html = `<div class="result-scroll"><div class="schema-panel">
+    <h3>${esc(schema)}.${esc(table)}</h3>
+    <div class="schema-tabs">
+      <div class="schema-tab ${activeTab === 'columns' ? 'active' : ''}" onclick="switchStructTab('columns')">Columns (${columns.length})</div>
+      <div class="schema-tab ${activeTab === 'indexes' ? 'active' : ''}" onclick="switchStructTab('indexes')">Indexes (${indexes.length})</div>
+    </div>`;
+
+  if (activeTab === 'columns') {
+    html += `<div class="schema-tab-content">
+      <div class="schema-actions-bar">
+        <span style="font-size:12px;color:var(--text3)">${columns.length} columns</span>
+        <button class="btn btn-sm btn-primary write-action" onclick="showAddColumnModal('${escAttr(schema)}','${escAttr(table)}')">+ Add Column</button>
+      </div>
+      <table class="schema-table"><thead><tr>
+        <th>Column</th><th>Type</th><th>Nullable</th><th>Key</th><th>Default</th>
+        <th class="write-action" style="width:1%">Actions</th>
+      </tr></thead><tbody>`;
+
+    for (const col of columns) {
+      let keyBadge = '';
+      if (col.key === 'PRI') keyBadge = '<span class="badge badge-pri">PRI</span>';
+      else if (col.key === 'UNI') keyBadge = '<span class="badge badge-uni">UNI</span>';
+
+      html += `<tr>
+        <td><strong>${esc(col.field)}</strong></td>
+        <td>${esc(col.type)}${col.length ? '(' + esc(col.length) + ')' : ''}</td>
+        <td>${esc(col.null)}</td>
+        <td>${keyBadge}</td>
+        <td>${col.default ? esc(col.default) : '<span class="null-value">NULL</span>'}</td>
+        <td class="write-action"><div class="col-actions">
+          <button class="col-action-btn danger" onclick="dropColumn('${escAttr(schema)}','${escAttr(table)}','${escAttr(col.field)}')" title="Drop">&#10005;</button>
+        </div></td>
+      </tr>`;
+    }
+    html += '</tbody></table></div>';
+  } else {
+    html += `<div class="schema-tab-content">
+      <div class="schema-actions-bar">
+        <span style="font-size:12px;color:var(--text3)">${indexes.length} indexes</span>
+        <button class="btn btn-sm btn-primary write-action" onclick="showCreateIndexModal('${escAttr(schema)}','${escAttr(table)}')">+ Create Index</button>
+      </div>
+      <table class="schema-table"><thead><tr>
+        <th>Index</th><th>Type</th><th>Unique</th><th>Primary</th><th>Columns</th>
+        <th class="write-action" style="width:1%">Actions</th>
+      </tr></thead><tbody>`;
+
+    if (indexes.length === 0) {
+      html += '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px">No indexes</td></tr>';
+    }
+    for (const idx of indexes) {
+      html += `<tr>
+        <td><strong>${esc(idx.name)}</strong></td>
+        <td><span class="badge badge-idx">${esc(idx.type)}</span></td>
+        <td>${idx.unique ? '<span class="badge badge-uni">UNIQUE</span>' : 'NO'}</td>
+        <td>${idx.primary ? '<span class="badge badge-pri">PRI</span>' : 'NO'}</td>
+        <td>${esc(idx.columns)}</td>
+        <td class="write-action"><div class="col-actions">
+          ${idx.primary ? '' : `<button class="col-action-btn danger" onclick="dropIndex('${escAttr(schema)}','${escAttr(table)}','${escAttr(idx.name)}')" title="Drop">&#10005;</button>`}
+        </div></td>
+      </tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+
+  html += '</div></div>';
+  area.innerHTML = html;
+
+  window._structState = { schema, table, columns, indexes };
+}
+
+function switchStructTab(tab) {
+  if (!window._structState) return;
+  const s = window._structState;
+  renderStructPanel(s.schema, s.table, s.columns, s.indexes, tab);
+}
+
+// ══════════════════════════════════════════════
+//  Column Management
+// ══════════════════════════════════════════════
+function showAddColumnModal(schema, table) {
+  showModal({
+    title: `Add Column — ${table}`,
+    body: `
+      <div class="form-row">
+        <div class="form-field" style="flex:2"><label>Column Name</label><input type="text" id="modalColName" placeholder="column_name"></div>
+        <div class="form-field" style="flex:2"><label>Type</label>
+          <select id="modalColType" onchange="onColModalTypeChange()">${buildTypeSelectOptions('VARCHAR')}</select>
+        </div>
+        <div class="form-field" style="flex:1" id="colLengthField">
+          <label>Length</label>
+          <input type="text" id="modalColLength" value="255" placeholder="255">
+        </div>
+      </div>
+      <div class="form-field" id="colCustomField" style="display:none">
+        <label>Custom Type</label>
+        <input type="text" id="modalColCustom" placeholder="e.g. NUMERIC(10,2)">
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>Nullable</label>
+          <select id="modalColNull"><option value="YES">YES</option><option value="NO" selected>NO</option></select>
+        </div>
+        <div class="form-field">
+          <label>Default</label>
+          <input type="text" id="modalColDefault" placeholder="none">
+          <div class="hint">NOW(), NULL, or a literal value</div>
+        </div>
+      </div>
+    `,
+    confirmText: 'Add',
+    onConfirm: async () => {
+      const name = document.getElementById('modalColName').value.trim();
+      if (!name) { showToast('Please enter a column name'); return false; }
+      const typeDef = getColModalType();
+      const nullable = document.getElementById('modalColNull').value === 'YES' ? 'NULL' : 'NOT NULL';
+      const def = document.getElementById('modalColDefault').value.trim();
+
+      let sql = `ALTER TABLE ${quoteId(schema)}.${quoteId(table)} ADD COLUMN ${quoteId(name)} ${typeDef} ${nullable}`;
+      if (def) sql += ` DEFAULT ${def}`;
+
+      const ok = await execSQL(sql);
+      if (ok) {
+        showToast('Column added');
+        await showStructPanel(schema, table);
+        refreshTreeTable(schema, table);
+      }
+      return ok;
+    }
+  });
+}
+
+function onColModalTypeChange() {
+  const t = document.getElementById('modalColType').value;
+  const lenField = document.getElementById('colLengthField');
+  const customField = document.getElementById('colCustomField');
+  const lenInput = document.getElementById('modalColLength');
+  if (t === 'CUSTOM') {
+    lenField.style.display = 'none';
+    customField.style.display = '';
+  } else if (typeNeedsLength(t)) {
+    lenField.style.display = '';
+    customField.style.display = 'none';
+    lenInput.placeholder = LENGTH_DEFAULTS[t] || '';
+    if (!lenInput.value) lenInput.value = LENGTH_DEFAULTS[t] || '';
+  } else {
+    lenField.style.display = 'none';
+    customField.style.display = 'none';
+  }
+}
+
+function getColModalType() {
+  const t = document.getElementById('modalColType').value;
+  if (t === 'CUSTOM') return document.getElementById('modalColCustom').value.trim() || 'TEXT';
+  if (typeNeedsLength(t)) {
+    const len = document.getElementById('modalColLength').value.trim();
+    return len ? `${t}(${len})` : t;
+  }
+  return t;
+}
+
+function dropColumn(schema, table, column) {
+  showDangerConfirm({
+    title: 'Drop Column',
+    message: `Drop column <strong>${esc(column)}</strong>?`,
+    detail: `Table ${esc(schema)}.${esc(table)}`,
+    confirmWord: column,
+    onConfirm: async () => {
+      const sql = `ALTER TABLE ${quoteId(schema)}.${quoteId(table)} DROP COLUMN ${quoteId(column)}`;
+      const ok = await execSQL(sql);
+      if (ok) {
+        showToast('Column dropped');
+        await showStructPanel(schema, table);
+        refreshTreeTable(schema, table);
+      }
+      return ok;
+    }
+  });
+}
+
+// ══════════════════════════════════════════════
+//  Index Management
+// ══════════════════════════════════════════════
+function showCreateIndexModal(schema, table) {
+  const cols = schemaCache[`${schema}.${table}`] || [];
+  const colCheckboxes = cols.map(c =>
+    `<label style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:13px;cursor:pointer">
+      <input type="checkbox" name="idxCol" value="${escAttr(c.field)}"> ${esc(c.field)} <span style="color:var(--text3);font-size:11px">${esc(c.type)}</span>
+    </label>`
+  ).join('');
+
+  showModal({
+    title: `Create Index — ${table}`,
+    body: `
+      <div class="form-field">
+        <label>Index Name</label>
+        <input type="text" id="modalIdxName" placeholder="idx_column_name">
+      </div>
+      <div class="form-field">
+        <label>Type</label>
+        <select id="modalIdxUnique">
+          <option value="">INDEX</option>
+          <option value="UNIQUE">UNIQUE</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label>Columns</label>
+        <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:5px;padding:6px 10px">
+          ${colCheckboxes}
+        </div>
+      </div>
+    `,
+    confirmText: 'Create',
+    onConfirm: async () => {
+      const name = document.getElementById('modalIdxName').value.trim();
+      const unique = document.getElementById('modalIdxUnique').value;
+      const checks = document.querySelectorAll('#activeModal input[name="idxCol"]:checked');
+      const selectedCols = Array.from(checks).map(c => c.value);
+
+      if (!name) { showToast('Please enter an index name'); return false; }
+      if (selectedCols.length === 0) { showToast('Select at least one column'); return false; }
+
+      const colList = selectedCols.map(c => quoteId(c)).join(', ');
+      const sql = `CREATE ${unique} INDEX ${quoteId(name)} ON ${quoteId(schema)}.${quoteId(table)} (${colList})`;
+
+      const ok = await execSQL(sql);
+      if (ok) {
+        showToast('Index created');
+        await showStructPanel(schema, table);
+        switchStructTab('indexes');
+        refreshTreeTable(schema, table);
+      }
+      return ok;
+    }
+  });
+}
+
+function dropIndex(schema, table, indexName) {
+  showDangerConfirm({
+    title: 'Drop Index',
+    message: `Drop index <strong>${esc(indexName)}</strong>?`,
+    detail: `Table ${esc(schema)}.${esc(table)}`,
+    confirmWord: indexName,
+    onConfirm: async () => {
+      const sql = `DROP INDEX ${quoteId(schema)}.${quoteId(indexName)}`;
+      const ok = await execSQL(sql);
+      if (ok) {
+        showToast('Index dropped');
+        await showStructPanel(schema, table);
+        switchStructTab('indexes');
+        refreshTreeTable(schema, table);
+      }
+      return ok;
+    }
+  });
+}
+
+async function refreshTreeTable(schema, table) {
+  const node = treeData[schema]?.tables?.[table];
+  if (node && node.expanded) {
+    node.columns = null;
+    node.indexes = null;
+    await loadTableDetails(schema, table);
+    renderTree();
+  }
+}
+
+// ══════════════════════════════════════════════
+//  Query Execution
+// ══════════════════════════════════════════════
+function isWriteQuery(sql) {
+  const t = sql.trim().toUpperCase();
+  const w = ['INSERT','UPDATE','DELETE','DROP','ALTER','CREATE','TRUNCATE','GRANT','REVOKE'];
+  return w.some(k => t.startsWith(k));
+}
+
+async function executeQuery() {
+  const sql = document.getElementById('sqlInput').value.trim();
+  if (!sql) return;
+
+  if (readOnly && isWriteQuery(sql)) {
+    showToast('Write operations blocked in read-only mode');
+    return;
+  }
+
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading"></span> Running...';
+
+  const area = document.getElementById('resultArea');
+  area.innerHTML = '<div class="result-toolbar"><div class="result-toolbar-left"><span class="loading"></span> Executing...</div></div>';
+
+  setLastResult(null);
+  setSortCol(null);
+
+  const ctx = getTableCtx();
+  const expectedSQL = ctx
+    ? `SELECT * FROM ${quoteId(ctx.schema)}.${quoteId(ctx.table)} LIMIT 100;`
+    : null;
+  if (!expectedSQL || sql !== expectedSQL) {
+    setTableCtx(null);
+  }
+
+  if (!getActiveTab()) {
+    const tab = createTab('Query', '&#9654;', 'query');
+    activeTabId = tab.id;
+    tab.sql = sql;
+    renderTabBar();
+  }
+
+  try {
+    const resp = await fetch('/api/query', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({sql: sql, schema: currentSchema})
+    });
+    const data = await resp.json();
+
+    if (data.code !== 200) {
+      area.innerHTML = `<div class="result-toolbar"><div class="result-toolbar-left"><span class="error">${esc(data.message)}</span></div></div>`;
+      return;
+    }
+
+    const result = data.data;
+    if (result.affected_rows !== undefined) {
+      area.innerHTML = `<div class="result-toolbar"><div class="result-toolbar-left">
+        <span class="count">${result.affected_rows} rows affected</span>
+        <span class="duration">${esc(result.duration)}</span>
+      </div></div>`;
+      return;
+    }
+
+    setLastResult(result);
+    renderResult();
+  } catch (e) {
+    area.innerHTML = `<div class="result-toolbar"><div class="result-toolbar-left"><span class="error">${esc(e.message)}</span></div></div>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '&#9654; Run';
+  }
+}
+
+// ══════════════════════════════════════════════
+//  Render Data Result
+// ══════════════════════════════════════════════
+const ICON = {
+  copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>',
+  edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+  download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+  clipboard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>',
+};
+
+function renderResult() {
+  const result = getLastResult();
+  if (!result) return;
+  const area = document.getElementById('resultArea');
+  const _sortCol = getSortCol();
+  const _sortAsc = getSortAsc();
+
+  let rows = result.rows || [];
+  if (_sortCol !== null && result.columns) {
+    const col = result.columns[_sortCol];
+    rows = [...rows].sort((a, b) => {
+      let va = a[col], vb = b[col];
+      if (va == null) va = '';
+      if (vb == null) vb = '';
+      if (typeof va === 'number' && typeof vb === 'number') return _sortAsc ? va - vb : vb - va;
+      va = String(va); vb = String(vb);
+      return _sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
+  }
+
+  const _ctx = getTableCtx();
+  const canEdit = !readOnly && _ctx && _ctx.primaryKeys.length > 0;
+
+  let toolbar = `<div class="result-toolbar">
+    <div class="result-toolbar-left">
+      <span class="count">${result.count} rows</span>
+      <span class="duration">${esc(result.duration)}</span>
+      <span style="color:var(--text3);font-size:11px">Click to copy · Double-click to view</span>
+    </div>
+    <div class="result-toolbar-right">
+      ${canEdit ? `<button class="btn btn-sm btn-primary write-action" onclick="addNewRow()" style="gap:3px"><span style="display:inline-flex;width:14px;height:14px">${ICON.plus}</span> Insert</button>` : ''}
+      <button class="btn btn-secondary btn-sm" onclick="copyAllResults()" style="gap:3px"><span style="display:inline-flex;width:13px;height:13px">${ICON.clipboard}</span> Copy All</button>
+      <button class="btn btn-secondary btn-sm" onclick="exportCSV()" style="gap:3px"><span style="display:inline-flex;width:13px;height:13px">${ICON.download}</span> CSV</button>
+    </div>
+  </div>`;
+
+  let table = '';
+  if (result.columns && result.columns.length > 0) {
+    table += '<div class="result-scroll"><table class="result-table"><thead><tr>';
+    result.columns.forEach((col, i) => {
+      let icon = '&#8597;', cls = '';
+      if (_sortCol === i) { icon = _sortAsc ? '&#9650;' : '&#9660;'; cls = ' active'; }
+      table += `<th onclick="sortByCol(${i})">${esc(col)} <span class="sort-icon${cls}">${icon}</span></th>`;
+    });
+    if (canEdit) table += '<th class="th-actions">Actions</th>';
+    table += '</tr></thead><tbody>';
+
+    window._displayRows = rows;
+
+    for (let ri = 0; ri < rows.length; ri++) {
+      const row = rows[ri];
+      table += '<tr>';
+      for (let ci = 0; ci < result.columns.length; ci++) {
+        const val = row[result.columns[ci]];
+        if (val == null) {
+          table += `<td onclick="copyCellFromRow(this,${ri},${ci})" ondblclick="viewCellDetail(${ri},${ci})"><span class="null-value">NULL</span></td>`;
+        } else {
+          table += `<td onclick="copyCellFromRow(this,${ri},${ci})" ondblclick="viewCellDetail(${ri},${ci})">${esc(String(val))}</td>`;
+        }
+      }
+      if (canEdit) {
+        table += `<td class="td-actions"><div class="row-actions">
+          <button class="row-action-btn btn-copy-row" title="Copy Row" onclick="copyRow(${ri})">${ICON.copy}</button>
+          <button class="row-action-btn btn-edit" title="Edit" onclick="editRow(${ri})">${ICON.edit}</button>
+          <button class="row-action-btn btn-delete" title="Delete" onclick="deleteRow(${ri})">${ICON.trash}</button>
+        </div></td>`;
+      }
+      table += '</tr>';
+    }
+    table += '</tbody></table></div>';
+  }
+
+  area.innerHTML = toolbar + table;
+}
+
+function sortByCol(idx) {
+  if (getSortCol() === idx) setSortAsc(!getSortAsc());
+  else { setSortCol(idx); setSortAsc(true); }
+  renderResult();
+}
+
+// ══════════════════════════════════════════════
+//  Data Copy
+// ══════════════════════════════════════════════
+function copyCellFromRow(td, rowIdx, colIdx) {
+  const r = getLastResult();
+  if (!r || !window._displayRows) return;
+  const row = window._displayRows[rowIdx];
+  const col = r.columns[colIdx];
+  const val = row[col];
+  const text = val == null ? 'NULL' : String(val);
+  navigator.clipboard.writeText(text).then(() => {
+    td.classList.add('cell-copied');
+    setTimeout(() => td.classList.remove('cell-copied'), 300);
+    showToast('Copied');
+  });
+}
+
+function viewCellDetail(rowIdx, colIdx) {
+  const r = getLastResult();
+  if (!r || !window._displayRows) return;
+  const row = window._displayRows[rowIdx];
+  const colName = r.columns[colIdx];
+  const val = row[colName];
+  const text = val == null ? 'NULL' : String(val);
+
+  let display = text;
+  let isJson = false;
+  if (val != null) {
+    try {
+      const parsed = JSON.parse(text);
+      display = JSON.stringify(parsed, null, 2);
+      isJson = true;
+    } catch (e) {}
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'cell-viewer-overlay';
+  overlay.id = 'cellViewer';
+  overlay.innerHTML = `
+    <div class="cell-viewer">
+      <div class="cell-viewer-header">
+        <span class="cv-title">${esc(colName)}${isJson ? ' <span style="color:var(--success);font-weight:400;font-size:11px">JSON</span>' : ''} <span style="color:var(--text3);font-weight:400;font-size:11px">${text.length.toLocaleString()} chars</span></span>
+        <div class="cv-actions">
+          <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('cvContent').textContent).then(()=>showToast('Copied'))">Copy</button>
+          <button class="btn btn-sm btn-secondary" onclick="closeCellViewer()">Close</button>
+        </div>
+      </div>
+      <div class="cell-viewer-body" id="cvContent">${val == null ? '<span class="null-value">NULL</span>' : esc(display)}</div>
+    </div>
+  `;
+  overlay.onclick = (e) => { if (e.target === overlay) closeCellViewer(); };
+  document.body.appendChild(overlay);
+}
+
+function closeCellViewer() {
+  const v = document.getElementById('cellViewer');
+  if (v) v.remove();
+}
+
+function copyRow(rowIdx) {
+  const r = getLastResult();
+  if (!r || !window._displayRows) return;
+  const row = window._displayRows[rowIdx];
+  const cols = r.columns;
+  const text = cols.map(c => { const v = row[c]; return v == null ? 'NULL' : String(v); }).join('\t');
+  navigator.clipboard.writeText(text).then(() => showToast('Row copied'));
+}
+
+function copyAllResults() {
+  const r = getLastResult();
+  if (!r || !r.columns) return;
+  const rows = r.rows || [];
+  const cols = r.columns;
+  let text = cols.join('\t') + '\n';
+  for (const row of rows) {
+    text += cols.map(c => { const v = row[c]; return v == null ? 'NULL' : String(v); }).join('\t') + '\n';
+  }
+  navigator.clipboard.writeText(text).then(() => showToast('All data copied'));
+}
+
+// ══════════════════════════════════════════════
+//  Row Edit / Delete
+// ══════════════════════════════════════════════
+function addNewRow() {
+  const ctx = getTableCtx();
+  if (!ctx) return;
+  const cols = schemaCache[`${ctx.schema}.${ctx.table}`] || [];
+
+  let fieldsHtml = '';
+  for (const col of cols) {
+    const isSerial = col.default && col.default.startsWith('nextval(');
+    const isPK = col.key === 'PRI';
+    fieldsHtml += `
+      <div class="form-field">
+        <label>${esc(col.field)} <span style="color:var(--text3);font-weight:400">${esc(col.type)}${isPK ? ' · PRI' : ''}${isSerial ? ' · serial' : ''}</span></label>
+        <input type="text" name="${esc(col.field)}" value="" placeholder="${isSerial ? 'auto-generated' : ''}"
+          ${isSerial ? 'disabled style="background:var(--bg3)"' : ''} data-serial="${isSerial}">
+        ${col.null === 'YES' ? `<label class="null-toggle"><input type="checkbox" onchange="toggleNullField(this)"> NULL</label>` : ''}
+      </div>`;
+  }
+
+  showModal({
+    title: `Insert Row — ${ctx.table}`,
+    body: fieldsHtml,
+    confirmText: 'Insert',
+    onConfirm: async () => {
+      const modal = document.getElementById('activeModal');
+      const inputs = modal.querySelectorAll('.form-field input[type="text"]');
+
+      const fields = [];
+      const values = [];
+      for (const input of inputs) {
+        if (input.dataset.serial === 'true') continue;
+        const nullCb = input.closest('.form-field').querySelector('.null-toggle input[type="checkbox"]');
+        const isNull = nullCb && nullCb.checked;
+        const val = input.value;
+        if (isNull) {
+          fields.push(quoteId(input.name));
+          values.push('NULL');
+        } else if (val !== '') {
+          fields.push(quoteId(input.name));
+          values.push(`'${sqlEsc(val)}'`);
+        }
+      }
+
+      if (fields.length === 0) { showToast('Fill at least one field'); return false; }
+
+      const sql = `INSERT INTO ${quoteId(ctx.schema)}.${quoteId(ctx.table)} (${fields.join(', ')}) VALUES (${values.join(', ')})`;
+      const ok = await execSQL(sql);
+      if (ok) {
+        showToast('Row inserted');
+        viewTableData(ctx.schema, ctx.table);
+      }
+      return ok;
+    }
+  });
+}
+
+function editRow(rowIdx) {
+  const ctx = getTableCtx();
+  if (!ctx || !window._displayRows) return;
+  const row = window._displayRows[rowIdx];
+  const cols = schemaCache[`${ctx.schema}.${ctx.table}`] || [];
+
+  let fieldsHtml = '';
+  for (const col of cols) {
+    const val = row[col.field];
+    const isNull = val == null;
+    const isPK = col.key === 'PRI';
+    const displayVal = isNull ? '' : String(val);
+    fieldsHtml += `
+      <div class="form-field">
+        <label>${esc(col.field)} <span style="color:var(--text3);font-weight:400">${esc(col.type)}${isPK ? ' · PRI' : ''}</span></label>
+        <input type="text" name="${esc(col.field)}" value="${escAttr(displayVal)}"
+          ${isPK ? 'readonly' : ''}
+          data-original="${escAttr(displayVal)}" data-null="${isNull}">
+        ${!isPK && col.null === 'YES' ? `<label class="null-toggle"><input type="checkbox" ${isNull ? 'checked' : ''} onchange="toggleNullField(this)"> NULL</label>` : ''}
+      </div>`;
+  }
+
+  showModal({
+    title: `Edit Row — ${ctx.table}`,
+    body: fieldsHtml,
+    confirmText: 'Save',
+    onConfirm: async () => {
+      const modal = document.getElementById('activeModal');
+      const inputs = modal.querySelectorAll('.form-field input[type="text"]');
+
+      const setClauses = [];
+      for (const input of inputs) {
+        const field = input.name;
+        const colSchema = cols.find(c => c.field === field);
+        if (colSchema && colSchema.key === 'PRI') continue;
+
+        const nullCb = input.closest('.form-field').querySelector('.null-toggle input[type="checkbox"]');
+        const isNull = nullCb && nullCb.checked;
+        const newVal = isNull ? null : input.value;
+        const origNull = input.dataset.null === 'true';
+        const origVal = origNull ? null : input.dataset.original;
+
+        if (newVal !== origVal) {
+          if (isNull) setClauses.push(`${quoteId(field)} = NULL`);
+          else setClauses.push(`${quoteId(field)} = '${sqlEsc(newVal)}'`);
+        }
+      }
+
+      if (setClauses.length === 0) { showToast('No changes'); return true; }
+
+      const whereClause = ctx.primaryKeys.map(pk => {
+        const val = row[pk];
+        if (val == null) return `${quoteId(pk)} IS NULL`;
+        return `${quoteId(pk)} = '${sqlEsc(String(val))}'`;
+      }).join(' AND ');
+
+      const sql = `UPDATE ${quoteId(ctx.schema)}.${quoteId(ctx.table)} SET ${setClauses.join(', ')} WHERE ${whereClause}`;
+      const ok = await execSQL(sql);
+      if (ok) { showToast('Updated'); viewTableData(ctx.schema, ctx.table); }
+      return ok;
+    }
+  });
+}
+
+function toggleNullField(checkbox) {
+  const input = checkbox.closest('.form-field').querySelector('input[type="text"]');
+  if (checkbox.checked) { input.disabled = true; input.value = ''; input.style.background = 'var(--bg3)'; }
+  else { input.disabled = false; input.style.background = ''; }
+}
+
+function deleteRow(rowIdx) {
+  const ctx = getTableCtx();
+  if (!ctx || !window._displayRows) return;
+  const row = window._displayRows[rowIdx];
+  const pkInfo = ctx.primaryKeys.map(pk => `${pk} = ${row[pk]}`).join(', ');
+
+  showDangerConfirm({
+    title: 'Confirm Delete',
+    message: 'Delete this row?',
+    detail: `${esc(ctx.table)} · ${esc(pkInfo)}`,
+    confirmWord: null,
+    onConfirm: async () => {
+      const whereClause = ctx.primaryKeys.map(pk => {
+        const val = row[pk];
+        if (val == null) return `${quoteId(pk)} IS NULL`;
+        return `${quoteId(pk)} = '${sqlEsc(String(val))}'`;
+      }).join(' AND ');
+      const sql = `DELETE FROM ${quoteId(ctx.schema)}.${quoteId(ctx.table)} WHERE ${whereClause}`;
+      const ok = await execSQL(sql);
+      if (ok) { showToast('Deleted'); viewTableData(ctx.schema, ctx.table); }
+      return ok;
+    }
+  });
+}
+
+// ══════════════════════════════════════════════
+//  Export CSV
+// ══════════════════════════════════════════════
+function exportCSV() {
+  const _r = getLastResult();
+  if (!_r || !_r.columns) return;
+  const rows = _r.rows || [];
+  const cols = _r.columns;
+
+  const csvEsc = (v) => {
+    if (v == null) return '';
+    const s = String(v);
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+
+  let csv = cols.map(csvEsc).join(',') + '\n';
+  for (const row of rows) csv += cols.map(c => csvEsc(row[c])).join(',') + '\n';
+
+  const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `query_result_${new Date().toISOString().slice(0,19).replace(/[:-]/g,'')}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('CSV exported');
+}
+
+// ══════════════════════════════════════════════
+//  Modal System
+// ══════════════════════════════════════════════
+function showModal({title, body, confirmText = 'OK', onConfirm, width}) {
+  closeModal();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'activeModal';
+  overlay.innerHTML = `
+    <div class="modal" ${width ? `style="width:${width}"` : ''}>
+      <div class="modal-header">
+        <span>${title}</span>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body">${body}</div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" id="modalConfirmBtn">${confirmText}</button>
+      </div>
+    </div>
+  `;
+  overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
+  document.body.appendChild(overlay);
+
+  document.getElementById('modalConfirmBtn').onclick = async () => {
+    const btn = document.getElementById('modalConfirmBtn');
+    btn.disabled = true; btn.innerHTML = '<span class="loading"></span>';
+    const ok = await onConfirm();
+    if (ok !== false) closeModal();
+    else { btn.disabled = false; btn.textContent = confirmText; }
+  };
+
+  const firstInput = overlay.querySelector('input:not([readonly]),textarea,select');
+  if (firstInput) setTimeout(() => firstInput.focus(), 50);
+}
+
+function showDangerConfirm({title, message, detail, confirmWord, onConfirm}) {
+  const needsInput = confirmWord && confirmWord.length > 0;
+  const inputHtml = needsInput
+    ? `<div style="margin-top:12px"><div style="font-size:12px;color:var(--text2);margin-bottom:4px">Type <strong>${esc(confirmWord)}</strong> to confirm</div><input class="confirm-input" id="dangerConfirmInput" type="text" placeholder="${escAttr(confirmWord)}"></div>`
+    : '';
+
+  closeModal();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'activeModal';
+  overlay.innerHTML = `
+    <div class="modal" style="width:420px">
+      <div class="modal-header">
+        <span>${title}</span>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="text-align:center;padding:20px 18px">
+        <p style="font-size:14px;margin-bottom:6px">${message}</p>
+        <p style="font-size:12px;color:var(--text2)">${detail}</p>
+        ${inputHtml}
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-danger" id="dangerConfirmBtn" ${needsInput ? 'disabled' : ''}>Drop</button>
+      </div>
+    </div>
+  `;
+  overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
+  document.body.appendChild(overlay);
+
+  if (needsInput) {
+    const input = document.getElementById('dangerConfirmInput');
+    const btn = document.getElementById('dangerConfirmBtn');
+    input.oninput = () => { btn.disabled = input.value !== confirmWord; };
+    setTimeout(() => input.focus(), 50);
+  }
+
+  document.getElementById('dangerConfirmBtn').onclick = async () => {
+    const btn = document.getElementById('dangerConfirmBtn');
+    btn.disabled = true; btn.innerHTML = '<span class="loading"></span>';
+    const ok = await onConfirm();
+    if (ok !== false) closeModal();
+    else { btn.disabled = false; btn.textContent = 'Drop'; }
+  };
+}
+
+function closeModal() {
+  const m = document.getElementById('activeModal');
+  if (m) m.remove();
+}
+
+// ══════════════════════════════════════════════
+//  SQL Execution Helper
+// ══════════════════════════════════════════════
+async function execSQL(sql) {
+  try {
+    const resp = await fetch('/api/query', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({sql, schema: currentSchema})
+    });
+    const data = await resp.json();
+    if (data.code !== 200) {
+      showToast('Error: ' + data.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    showToast('Error: ' + e.message);
+    return false;
+  }
+}
+
+// ══════════════════════════════════════════════
+//  Utilities
+// ══════════════════════════════════════════════
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function clearResults() {
+  setLastResult(null); setSortCol(null); setTableCtx(null);
+  document.getElementById('resultArea').innerHTML = `
+    <div class="empty-state"><div class="empty-icon">&#9741;</div><p>Run a query to see results</p></div>`;
+}
+
+function esc(str) {
+  if (str == null) return '';
+  const d = document.createElement('div');
+  d.textContent = String(str);
+  return d.innerHTML;
+}
+
+function escAttr(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// PostgreSQL uses double-quote identifiers
+function quoteId(s) { return '"' + String(s).replace(/"/g, '""') + '"'; }
+
+function sqlEsc(s) { return String(s).replace(/'/g, "''"); }
+
+// ══════════════════════════════════════════════
+//  Keyboard Shortcuts
+// ══════════════════════════════════════════════
+document.getElementById('sqlInput').addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    executeQuery();
+  }
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const start = this.selectionStart;
+    this.value = this.value.substring(0, start) + '  ' + this.value.substring(this.selectionEnd);
+    this.selectionStart = this.selectionEnd = start + 2;
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { closeCellViewer(); closeModal(); }
+});
+
+init();
+</script>
+</body>
+</html>
