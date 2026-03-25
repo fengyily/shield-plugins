@@ -17,7 +17,7 @@ jobs:
       plugins: ${{ steps.changes.outputs.plugins }}
       has_changes: ${{ steps.changes.outputs.has_changes }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -59,7 +59,7 @@ jobs:
       matrix:
         plugin: ${{ fromJson(needs.detect.outputs.plugins) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Go
         uses: actions/setup-go@v5
