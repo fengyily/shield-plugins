@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	_ "github.com/lib/pq"
@@ -44,6 +45,13 @@ type StartResponse struct {
 }
 
 func main() {
+	// Standalone mode: run as Docker container / standalone binary
+	if os.Getenv("DB_HOST") != "" {
+		standaloneMode()
+		return
+	}
+
+	// Plugin protocol mode: read JSON commands from stdin
 	decoder := json.NewDecoder(os.Stdin)
 
 	for {
@@ -61,6 +69,62 @@ func main() {
 	}
 }
 
+func standaloneMode() {
+	port := 5432
+	if v := os.Getenv("DB_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			port = p
+		}
+	}
+	readOnly := false
+	if v := os.Getenv("DB_READONLY"); v == "true" || v == "1" {
+		readOnly = true
+	}
+	webPort := 8080
+	if v := os.Getenv("WEB_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			webPort = p
+		}
+	}
+
+	cfg := PluginConfig{
+		Host:     os.Getenv("DB_HOST"),
+		Port:     port,
+		User:     os.Getenv("DB_USER"),
+		Pass:     os.Getenv("DB_PASS"),
+		Database: os.Getenv("DB_NAME"),
+		ReadOnly: readOnly,
+	}
+
+	db, err := connectDB(cfg)
+	if err != nil {
+		log.Fatalf("Database connection failed: %v", err)
+	}
+	defer db.Close()
+
+	mux := setupHTTP(db, cfg)
+
+	addr := fmt.Sprintf("0.0.0.0:%d", webPort)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatalf("Failed to listen on %s: %v", addr, err)
+	}
+
+	fmt.Fprintf(os.Stderr, "PostgreSQL Web Client listening on %s\n", addr)
+
+	go func() {
+		if err := http.Serve(listener, mux); err != nil {
+			log.Fatalf("HTTP server error: %v", err)
+		}
+	}()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
+
+	fmt.Fprintf(os.Stderr, "Shutting down\n")
+}
+
 func respond(resp StartResponse) {
 	json.NewEncoder(os.Stdout).Encode(resp)
 }
@@ -69,7 +133,7 @@ func respondError(msg string) {
 	respond(StartResponse{Status: "error", Message: msg})
 }
 
-func handleStart(cfg PluginConfig) {
+func connectDB(cfg PluginConfig) (*sql.DB, error) {
 	user := cfg.User
 	if user == "" {
 		user = "postgres"
@@ -84,21 +148,16 @@ func handleStart(cfg PluginConfig) {
 
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
-		respondError(fmt.Sprintf("failed to open connection: %v", err))
-		return
+		return nil, fmt.Errorf("failed to open connection: %w", err)
 	}
 	if err := db.Ping(); err != nil {
-		respondError(fmt.Sprintf("cannot connect to PostgreSQL at %s:%d: %v", cfg.Host, cfg.Port, err))
-		return
+		db.Close()
+		return nil, fmt.Errorf("cannot connect to PostgreSQL at %s:%d: %w", cfg.Host, cfg.Port, err)
 	}
+	return db, nil
+}
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		respondError(fmt.Sprintf("failed to find available port: %v", err))
-		return
-	}
-	webPort := listener.Addr().(*net.TCPAddr).Port
-
+func setupHTTP(db *sql.DB, cfg PluginConfig) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/schemas", schemasHandler(db))
@@ -110,6 +169,26 @@ func handleStart(cfg PluginConfig) {
 
 	staticSub, _ := fs.Sub(staticFS, "static")
 	mux.Handle("/", http.FileServer(http.FS(staticSub)))
+
+	return mux
+}
+
+func handleStart(cfg PluginConfig) {
+	db, err := connectDB(cfg)
+	if err != nil {
+		respondError(err.Error())
+		return
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		db.Close()
+		respondError(fmt.Sprintf("failed to find available port: %v", err))
+		return
+	}
+	webPort := listener.Addr().(*net.TCPAddr).Port
+
+	mux := setupHTTP(db, cfg)
 
 	respond(StartResponse{
 		Status:  "ready",
