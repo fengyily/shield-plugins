@@ -96,6 +96,44 @@ docker run -d --name shield-postgres \
 
 Open http://localhost:8080 to manage your PostgreSQL database.
 
+### Networking
+
+Docker 容器默认无法直接访问宿主机网络，根据场景选择合适的方式：
+
+**连接宿主机上的数据库（Linux）** — 使用 host 网络模式：
+
+```bash
+docker run -d --network host \
+  -e DB_HOST=10.0.0.20 \
+  -e DB_USER=postgres \
+  -e DB_PASS=mypass \
+  fengyily/shield-postgres
+```
+
+> `--network host` 模式下无需 `-p` 端口映射，Web UI 直接监听宿主机 8080 端口。
+
+**连接宿主机上的数据库（macOS / Windows Docker Desktop）** — 使用 `host.docker.internal`：
+
+```bash
+docker run -d \
+  -e DB_HOST=host.docker.internal \
+  -e DB_USER=postgres \
+  -e DB_PASS=mypass \
+  -p 8080:8080 \
+  fengyily/shield-postgres
+```
+
+**连接其他 Docker 容器中的数据库** — 使用同一 Docker 网络：
+
+```bash
+docker run -d --network my-net \
+  -e DB_HOST=my-postgres-container \
+  -e DB_USER=postgres \
+  -e DB_PASS=mypass \
+  -p 8080:8080 \
+  fengyily/shield-postgres
+```
+
 ### Environment Variables
 
 | Variable | Default | Description |
