@@ -31,6 +31,15 @@
   let dragStartX = 0, dragStartY = 0, dragViewX = 0, dragViewY = 0;
   let rafId = null;
 
+  // ── Collaboration state ──
+  let collabWs = null;       // WebSocket connection
+  let collabMe = null;       // { user_id, name, color }
+  let collabUsers = [];      // [{ user_id, name, color }]
+  let collabCursors = {};    // { user_id: { x, y, name, color, ts } }
+  let collabDrags = {};      // { user_id: { table, x, y, name, color } }
+  let collabReconnectTimer = null;
+  let collabCursorCleanTimer = null;
+
   // ════════════════════════════════════════════
   //  Public API
   // ════════════════════════════════════════════
@@ -42,6 +51,11 @@
     if (erVisible) {
       populateSchemaSelect();
       loadER();
+      collabConnect();
+      collabStartCleanup();
+    } else {
+      collabDisconnect();
+      clearInterval(collabCursorCleanTimer);
     }
   };
 
@@ -55,6 +69,8 @@
       const sel = document.getElementById('erSchemaSelect');
       sel.value = schema;
       loadER();
+      collabConnect();
+      collabStartCleanup();
     });
   };
 
@@ -639,6 +655,7 @@
     svg += renderRelations(relations, tableLookup);
     tables.forEach(t => { svg += renderTableSvg(t); });
     if (colDrag) svg += renderDragLine(tableLookup);
+    svg += renderCollabOverlays();
     svg += '</g></svg>';
     canvas.innerHTML = svg;
   }
@@ -898,11 +915,14 @@
       dragMoved = true;
       const pt = screenToSvg(e.clientX, e.clientY);
       colDrag.curX = pt.x; colDrag.curY = pt.y;
+      collabSendCursor(pt.x, pt.y);
       scheduleRender();
     } else if (tableDrag) {
       dragMoved = true;
       const pt = screenToSvg(e.clientX, e.clientY);
-      tablePositions[tableDrag.name] = { x: pt.x - tableDrag.ox, y: pt.y - tableDrag.oy };
+      const newPos = { x: pt.x - tableDrag.ox, y: pt.y - tableDrag.oy };
+      tablePositions[tableDrag.name] = newPos;
+      collabSendDrag(tableDrag.name, newPos.x, newPos.y, false);
       scheduleRender();
     } else if (panActive) {
       dragMoved = true;
@@ -991,7 +1011,11 @@
       canvas.style.cursor = 'grab';
       scheduleRender();
     } else if (tableDrag) {
-      if (dragMoved) savePositions();
+      if (dragMoved) {
+        const pos = tablePositions[tableDrag.name];
+        if (pos) collabSendDrag(tableDrag.name, pos.x, pos.y, true);
+        savePositions();
+      }
       tableDrag = null;
       canvas.style.cursor = 'grab';
     } else if (panActive) {
@@ -1066,6 +1090,7 @@
   canvas.addEventListener('mousemove', function hoverCursor(e) {
     if (tableDrag || panActive || colDrag) return;
     const pt = screenToSvg(e.clientX, e.clientY);
+    collabSendCursor(pt.x, pt.y);
     const col = hitTestColumn(pt.x, pt.y);
 
     // Track hovered column for showing gear icon
@@ -1220,6 +1245,7 @@
       if (success) {
         overlay.remove();
         showToast('Foreign key created' + (opts.needsCreate ? ' (new column added)' : ''), 'success');
+        collabNotifySchemaChanged();
         loadER();
       }
     };
@@ -1281,6 +1307,7 @@
         overlay.remove();
         selectedRel = null;
         showToast('Foreign key dropped: ' + constraintName, 'success');
+        collabNotifySchemaChanged();
         loadER();
       } catch(e) {
         showToast('Request failed', 'error');
@@ -1582,6 +1609,7 @@
         }
         overlay.remove();
         showToast('Table updated', 'success');
+        collabNotifySchemaChanged();
         loadER();
       } catch(e) {
         showToast('Error: ' + e.message, 'error');
@@ -1638,6 +1666,7 @@
         }
         overlay.remove();
         showToast('Table renamed: ' + tableName + ' → ' + newName, 'success');
+        collabNotifySchemaChanged();
         loadER();
       } catch(e) {
         showToast('Error: ' + e.message, 'error');
@@ -1697,6 +1726,7 @@
         delete tablePositions[tableName]; savePositions();
         overlay.remove();
         showToast('Table dropped: ' + tableName, 'success');
+        collabNotifySchemaChanged();
         loadER();
       } catch(e) {
         showToast('Error: ' + e.message, 'error');
@@ -1784,6 +1814,7 @@
         if (pos) { tablePositions[tblName] = { x: pos.x, y: pos.y }; savePositions(); }
         overlay.remove();
         showToast('Table created: ' + tblName, 'success');
+        collabNotifySchemaChanged();
         loadER();
       } catch(e) {
         showToast('Error: ' + e.message, 'error');
@@ -1846,6 +1877,7 @@
         await execSql(sql);
         overlay.remove();
         showToast('Column added to ' + tableName, 'success');
+        collabNotifySchemaChanged();
         loadER();
       } catch(e) {
         showToast('Error: ' + e.message, 'error');
@@ -1915,12 +1947,254 @@
         await execStmts(stmts);
         overlay.remove();
         showToast('Column updated', 'success');
+        collabNotifySchemaChanged();
         loadER();
       } catch(e) {
         showToast('Error: ' + e.message, 'error');
         this.disabled = false; this.textContent = 'Save';
       }
     };
+  }
+
+  // ══════════════════════════════════════════════
+  //  Delete Column
+  // ══════════════════════════════════════════════
+
+  // ══════════════════════════════════════════════
+  //  Collaboration — WebSocket client
+  // ══════════════════════════════════════════════
+
+  function collabConnect() {
+    if (collabWs && collabWs.readyState <= 1) return; // already open or connecting
+    const schema = (document.getElementById('erSchemaSelect') || {}).value || 'public';
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url = proto + '//' + location.host + '/ws/er?schema=' + encodeURIComponent(schema);
+    try {
+      collabWs = new WebSocket(url);
+    } catch(e) { return; }
+
+    collabWs.onopen = function() {
+      clearTimeout(collabReconnectTimer);
+    };
+
+    collabWs.onmessage = function(evt) {
+      try {
+        const msg = JSON.parse(evt.data);
+        collabHandleMsg(msg);
+      } catch(e) {}
+    };
+
+    collabWs.onclose = function() {
+      collabWs = null;
+      // Clear remote state
+      collabCursors = {};
+      collabDrags = {};
+      collabUsers = [];
+      collabRenderPresence();
+      // Reconnect after delay if ER is still visible
+      if (erVisible) {
+        collabReconnectTimer = setTimeout(collabConnect, 2000);
+      }
+    };
+
+    collabWs.onerror = function() {
+      // onclose will fire after this
+    };
+  }
+
+  function collabDisconnect() {
+    clearTimeout(collabReconnectTimer);
+    if (collabWs) {
+      collabWs.onclose = null;
+      collabWs.close();
+      collabWs = null;
+    }
+    collabMe = null;
+    collabUsers = [];
+    collabCursors = {};
+    collabDrags = {};
+    collabRenderPresence();
+  }
+
+  function collabSend(msg) {
+    if (collabWs && collabWs.readyState === 1) {
+      collabWs.send(JSON.stringify(msg));
+    }
+  }
+
+  function collabHandleMsg(msg) {
+    switch (msg.type) {
+      case 'welcome':
+        collabMe = { user_id: msg.user_id, name: msg.name, color: msg.color };
+        break;
+
+      case 'presence':
+        if (msg.data) {
+          collabUsers = msg.data;
+          collabRenderPresence();
+        }
+        break;
+
+      case 'cursor':
+        if (msg.user_id && msg.user_id !== (collabMe && collabMe.user_id)) {
+          const d = msg.data ? JSON.parse(msg.data) : null;
+          if (d) {
+            collabCursors[msg.user_id] = {
+              x: d.x, y: d.y, name: msg.name, color: msg.color, ts: Date.now()
+            };
+            scheduleRender();
+          }
+        }
+        break;
+
+      case 'drag':
+        if (msg.user_id && msg.user_id !== (collabMe && collabMe.user_id)) {
+          const d = msg.data ? JSON.parse(msg.data) : null;
+          if (d) {
+            if (d.done) {
+              delete collabDrags[msg.user_id];
+              // Apply final position
+              if (d.table && tablePositions[d.table]) {
+                tablePositions[d.table] = { x: d.x, y: d.y };
+                savePositions();
+              }
+            } else {
+              collabDrags[msg.user_id] = {
+                table: d.table, x: d.x, y: d.y, name: msg.name, color: msg.color
+              };
+              // Live update position
+              if (d.table && tablePositions[d.table]) {
+                tablePositions[d.table] = { x: d.x, y: d.y };
+              }
+            }
+            scheduleRender();
+          }
+        }
+        break;
+
+      case 'schema_changed':
+        // Another user modified the schema — reload ER data
+        loadER();
+        break;
+    }
+  }
+
+  // Send cursor position (throttled)
+  let lastCursorSend = 0;
+  function collabSendCursor(svgX, svgY) {
+    const now = Date.now();
+    if (now - lastCursorSend < 50) return; // throttle to ~20fps
+    lastCursorSend = now;
+    collabSend({ type: 'cursor', data: JSON.stringify({ x: svgX, y: svgY }) });
+  }
+
+  // Send table drag position (throttled)
+  let lastDragSend = 0;
+  function collabSendDrag(tableName, x, y, done) {
+    const now = Date.now();
+    if (!done && now - lastDragSend < 33) return; // throttle to ~30fps
+    lastDragSend = now;
+    collabSend({ type: 'drag', data: JSON.stringify({ table: tableName, x: x, y: y, done: !!done }) });
+  }
+
+  // Notify that schema structure changed (FK created/deleted, table created/dropped, etc.)
+  function collabNotifySchemaChanged() {
+    collabSend({ type: 'schema_changed' });
+  }
+
+  // Switch schema (exposed on window for inline onchange handler)
+  window._collabSwitchSchema = collabSwitchSchema;
+  function collabSwitchSchema(newSchema) {
+    collabSend({ type: 'switch_schema', data: JSON.stringify({ schema: newSchema }) });
+    // Reconnect to get proper presence for the new schema
+    collabDisconnect();
+    setTimeout(collabConnect, 100);
+  }
+
+  // ── Presence UI ──
+
+  function collabRenderPresence() {
+    let bar = document.getElementById('erCollabBar');
+    if (!bar) return;
+
+    // Filter out self
+    const others = collabUsers.filter(u => !collabMe || u.user_id !== collabMe.user_id);
+    if (others.length === 0 && !collabMe) {
+      bar.innerHTML = '';
+      return;
+    }
+
+    let html = '';
+    // Show self
+    if (collabMe) {
+      html += '<div class="collab-avatar" style="background:' + collabMe.color + '" title="You (' + escXml(collabMe.name) + ')">'
+        + escXml(collabMe.name.charAt(0)) + '</div>';
+    }
+    // Show others
+    others.forEach(u => {
+      html += '<div class="collab-avatar" style="background:' + u.color + '" title="' + escXml(u.name) + '">'
+        + escXml(u.name.charAt(0)) + '</div>';
+    });
+    // Count label
+    const total = collabUsers.length;
+    if (total > 0) {
+      html += '<span class="collab-count">' + total + ' online</span>';
+    }
+    bar.innerHTML = html;
+  }
+
+  // ── Render remote cursors + drag indicators in SVG ──
+
+  function renderCollabOverlays() {
+    let s = '';
+    const now = Date.now();
+
+    // Remote cursors
+    for (const uid in collabCursors) {
+      const c = collabCursors[uid];
+      if (now - c.ts > 5000) { delete collabCursors[uid]; continue; } // stale
+      const opacity = now - c.ts > 3000 ? '0.4' : '0.85';
+      // Cursor arrow
+      s += '<g opacity="' + opacity + '">'
+        + '<polygon points="' + c.x + ',' + c.y + ' ' + (c.x) + ',' + (c.y+16) + ' ' + (c.x+5) + ',' + (c.y+13) + ' ' + (c.x+10) + ',' + (c.y+19) + ' ' + (c.x+13) + ',' + (c.y+17) + ' ' + (c.x+8) + ',' + (c.y+11) + ' ' + (c.x+14) + ',' + (c.y+10) + '" '
+        + 'fill="' + c.color + '" stroke="white" stroke-width="0.8"/>'
+        // Name label
+        + '<rect x="' + (c.x+14) + '" y="' + (c.y+10) + '" width="' + (c.name.length * 7 + 10) + '" height="18" rx="9" fill="' + c.color + '"/>'
+        + '<text x="' + (c.x+19) + '" y="' + (c.y+23) + '" font-size="11" fill="white" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-weight="500">'
+        + escXml(c.name) + '</text>'
+        + '</g>';
+    }
+
+    // Remote drag indicators (colored border around dragged table)
+    for (const uid in collabDrags) {
+      const d = collabDrags[uid];
+      const pos = tablePositions[d.table];
+      if (!pos) continue;
+      const tbl = erData && (erData.tables || []).find(t => t.name === d.table);
+      if (!tbl) continue;
+      const h = getTableHeight(tbl);
+      const w = tw(d.table);
+      s += '<rect x="' + (pos.x-3) + '" y="' + (pos.y-3) + '" width="' + (w+6) + '" height="' + (h+6)
+        + '" rx="8" fill="none" stroke="' + d.color + '" stroke-width="2.5" stroke-dasharray="6,3" opacity="0.7"/>'
+        + '<rect x="' + (pos.x-3) + '" y="' + (pos.y-22) + '" width="' + (d.name.length * 7 + 10) + '" height="18" rx="9" fill="' + d.color + '"/>'
+        + '<text x="' + (pos.x+2) + '" y="' + (pos.y-9) + '" font-size="11" fill="white" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-weight="500">'
+        + escXml(d.name) + '</text>';
+    }
+
+    return s;
+  }
+
+  // Clean stale cursors periodically
+  function collabStartCleanup() {
+    clearInterval(collabCursorCleanTimer);
+    collabCursorCleanTimer = setInterval(() => {
+      const now = Date.now();
+      let changed = false;
+      for (const uid in collabCursors) {
+        if (now - collabCursors[uid].ts > 5000) { delete collabCursors[uid]; changed = true; }
+      }
+      if (changed) scheduleRender();
+    }, 2000);
   }
 
   // ══════════════════════════════════════════════
@@ -1979,6 +2253,7 @@
         await execSql('ALTER TABLE ' + quoteId(schema) + '.' + quoteId(tableName) + ' DROP COLUMN ' + quoteId(col.name) + (cb.checked ? ' CASCADE' : ' RESTRICT'));
         overlay.remove();
         showToast('Column dropped: ' + tableName + '.' + col.name, 'success');
+        collabNotifySchemaChanged();
         loadER();
       } catch(e) {
         showToast('Error: ' + e.message, 'error');

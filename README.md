@@ -36,6 +36,26 @@ User runs: shield postgres 10.0.0.20 --db-user admin --db-pass ****
               Public HTTPS URL generated
 ```
 
+## Features
+
+### PostgreSQL Plugin
+
+- **SQL Editor** — Multi-tab SQL editor with syntax highlighting, result sorting, CSV export
+- **Schema Explorer** — Sidebar tree: Schema → Table → Columns / Indexes
+- **Table Management** — Create, rename, drop tables; add, edit, delete columns and indexes
+- **ER Diagram** — Interactive entity-relationship diagram with multiple layouts (grid, horizontal, vertical, center)
+  - Drag-and-drop FK creation between tables
+  - Right-click context menus for table/column operations
+  - Export to SVG
+- **Real-time Collaboration** — Multiple users can view and edit the same ER diagram simultaneously via WebSocket:
+  - Live cursor tracking with colored name labels
+  - Real-time table drag synchronization
+  - Schema change notifications (FK/table/column CRUD auto-refreshes for all users)
+  - Online presence indicator with avatar bar
+  - Auto-reconnect on connection loss
+- **Read-Only Mode** — Frontend + backend enforced read-only access
+- **Docker Support** — Standalone ~9 MB image, no runtime dependencies
+
 ## Plugins
 
 | Plugin | Service | Protocols | Default Port | Docker Image | Status |
@@ -399,8 +419,10 @@ shield-plugins/
 │   ├── go.sum
 │   ├── main.go                   Plugin protocol + HTTP server
 │   ├── handler.go                API endpoints (schemas, tables, query...)
+│   ├── collab.go                 WebSocket hub for ER diagram collaboration
 │   ├── static/
-│   │   └── index.html            Embedded Web UI (~2100 lines)
+│   │   ├── index.html            Embedded Web UI
+│   │   └── er.js                 ER diagram with real-time collaboration
 │   └── README.md
 ├── shield-plugin-redis/       ← (planned)
 └── shield-plugin-sqlserver/   ← (planned)

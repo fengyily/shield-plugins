@@ -102,7 +102,9 @@ func standaloneMode() {
 	}
 	defer db.Close()
 
-	mux := setupHTTP(db, cfg)
+	hub := newCollabHub()
+	go hub.run()
+	mux := setupHTTP(db, cfg, hub)
 
 	addr := fmt.Sprintf("0.0.0.0:%d", webPort)
 	listener, err := net.Listen("tcp", addr)
@@ -157,7 +159,7 @@ func connectDB(cfg PluginConfig) (*sql.DB, error) {
 	return db, nil
 }
 
-func setupHTTP(db *sql.DB, cfg PluginConfig) *http.ServeMux {
+func setupHTTP(db *sql.DB, cfg PluginConfig, hub *CollabHub) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/schemas", schemasHandler(db))
@@ -167,6 +169,7 @@ func setupHTTP(db *sql.DB, cfg PluginConfig) *http.ServeMux {
 	mux.HandleFunc("/api/query", queryHandler(db, cfg.ReadOnly))
 	mux.HandleFunc("/api/info", infoHandler(db, cfg))
 	mux.HandleFunc("/api/er", erHandler(db))
+	mux.HandleFunc("/ws/er", collabHandler(hub))
 
 	staticSub, _ := fs.Sub(staticFS, "static")
 	mux.Handle("/", http.FileServer(http.FS(staticSub)))
@@ -189,7 +192,9 @@ func handleStart(cfg PluginConfig) {
 	}
 	webPort := listener.Addr().(*net.TCPAddr).Port
 
-	mux := setupHTTP(db, cfg)
+	hub := newCollabHub()
+	go hub.run()
+	mux := setupHTTP(db, cfg, hub)
 
 	respond(StartResponse{
 		Status:  "ready",

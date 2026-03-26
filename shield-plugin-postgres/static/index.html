@@ -446,6 +446,15 @@ table.schema-table tbody tr:hover td { background: var(--accent-light); }
 }
 .er-schema-select:focus { border-color: var(--accent); }
 .er-info { font-size: 13px; color: var(--text2); }
+.er-collab-bar { display: flex; align-items: center; gap: 6px; margin: 0 4px; }
+.collab-avatar {
+  width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center;
+  justify-content: center; color: white; font-size: 12px; font-weight: 600;
+  border: 2px solid var(--bg); box-shadow: 0 0 0 1px rgba(0,0,0,0.1);
+  cursor: default; user-select: none;
+}
+.collab-avatar + .collab-avatar { margin-left: -8px; }
+.collab-count { font-size: 11px; color: var(--text2); margin-left: 4px; white-space: nowrap; }
 .er-canvas {
   flex: 1; overflow: hidden; position: relative; cursor: grab;
   background: var(--bg2);
@@ -520,7 +529,7 @@ table.schema-table tbody tr:hover td { background: var(--accent-light); }
 <div id="erOverlay" class="er-overlay" style="display:none;">
   <div class="er-toolbar">
     <div class="er-toolbar-left">
-      <select id="erSchemaSelect" class="er-schema-select" onchange="loadER()"></select>
+      <select id="erSchemaSelect" class="er-schema-select" onchange="loadER(); if(window._collabSwitchSchema) window._collabSwitchSchema(this.value);"></select>
       <select id="erLayoutSelect" class="er-schema-select" onchange="erSetLayout(this.value)">
         <option value="grid">Grid</option>
         <option value="horizontal">Horizontal</option>
@@ -529,6 +538,7 @@ table.schema-table tbody tr:hover td { background: var(--accent-light); }
       </select>
       <span class="er-info" id="erInfo"></span>
     </div>
+    <div id="erCollabBar" class="er-collab-bar"></div>
     <div class="er-toolbar-right">
       <button class="btn btn-sm btn-secondary" onclick="erZoom(1.2)" title="Zoom In">&#43;</button>
       <button class="btn btn-sm btn-secondary" onclick="erZoom(1/1.2)" title="Zoom Out">&#8722;</button>
