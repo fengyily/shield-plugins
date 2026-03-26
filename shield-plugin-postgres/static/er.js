@@ -31,6 +31,12 @@
   let dragStartX = 0, dragStartY = 0, dragViewX = 0, dragViewY = 0;
   let rafId = null;
 
+  // Multi-select
+  let selectedTables = new Set();  // set of table names
+  let multiDragOffsets = {};       // { tableName: { dx, dy } } relative to drag anchor
+  let marquee = null;              // { x1, y1, x2, y2 } in SVG coords when dragging
+  let marqueePending = null;       // { x, y, sx, sy } waiting for threshold
+
   // ── Collaboration state ──
   let collabWs = null;       // WebSocket connection
   let collabMe = null;       // { user_id, name, color }
@@ -655,6 +661,7 @@
     svg += renderRelations(relations, tableLookup);
     tables.forEach(t => { svg += renderTableSvg(t); });
     if (colDrag) svg += renderDragLine(tableLookup);
+    if (marquee) svg += renderMarquee();
     svg += renderCollabOverlays();
     svg += '</g></svg>';
     canvas.innerHTML = svg;
@@ -704,6 +711,14 @@
       }
     }
     return s;
+  }
+
+  function renderMarquee() {
+    if (!marquee) return '';
+    const x = Math.min(marquee.x1, marquee.x2), y = Math.min(marquee.y1, marquee.y2);
+    const w = Math.abs(marquee.x2 - marquee.x1), h = Math.abs(marquee.y2 - marquee.y1);
+    return '<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h
+      + '" fill="rgba(76,110,245,0.08)" stroke="#4c6ef5" stroke-width="1" stroke-dasharray="6,3" rx="2"/>';
   }
 
   function svgDefs() {
@@ -760,22 +775,26 @@
     const h = getTableHeight(t);
     let s = '';
 
+    const isSel = selectedTables.has(t.name);
     s += '<rect x="'+(pos.x+3)+'" y="'+(pos.y+3)+'" width="'+W+'" height="'+h+'" rx="6" fill="rgba(0,0,0,0.06)"/>';
-    s += '<rect x="'+pos.x+'" y="'+pos.y+'" width="'+W+'" height="'+h+'" rx="6" fill="white" stroke="#cbd5e1" stroke-width="1"/>';
+    if (isSel) {
+      s += '<rect x="'+(pos.x-3)+'" y="'+(pos.y-3)+'" width="'+(W+6)+'" height="'+(h+6)+'" rx="8" fill="rgba(76,110,245,0.06)" stroke="#4c6ef5" stroke-width="2"/>';
+    }
+    s += '<rect x="'+pos.x+'" y="'+pos.y+'" width="'+W+'" height="'+h+'" rx="6" fill="white" stroke="'+(isSel?'#4c6ef5':'#cbd5e1')+'" stroke-width="'+(isSel?'2':'1')+'"/>';
     s += '<path d="M'+(pos.x+6)+','+pos.y+' h'+(W-12)+' q6,0 6,6 v'+(HEADER_HEIGHT-6)+' h-'+W+' v-'+(HEADER_HEIGHT-6)+' q0,-6 6,-6 z" fill="#336791"/>';
     s += '<line x1="'+pos.x+'" y1="'+(pos.y+HEADER_HEIGHT)+'" x2="'+(pos.x+W)+'" y2="'+(pos.y+HEADER_HEIGHT)+'" stroke="#cbd5e1" stroke-width="1"/>';
     s += '<text x="'+(pos.x+12)+'" y="'+(pos.y+21)+'" font-size="13" font-weight="600" fill="white" font-family="-apple-system,BlinkMacSystemFont,sans-serif">'
       + '\u25ED '+escXml(t.name)+'</text>';
 
-    // ⚙ gear icon on header
+    s += '<rect x="'+pos.x+'" y="'+pos.y+'" width="'+W+'" height="'+HEADER_HEIGHT+'" fill="transparent" style="cursor:move" data-table="'+escXml(t.name)+'"/>';
+
+    // ⚙ gear icon on header (rendered after drag rect so it receives clicks)
     if (!ro()) {
       s += '<g data-action="table-edit" data-table="'+escXml(t.name)+'" style="cursor:pointer">'
         + '<rect x="'+(pos.x+W-26)+'" y="'+(pos.y+2)+'" width="24" height="28" fill="transparent"/>'
         + '<text x="'+(pos.x+W-14)+'" y="'+(pos.y+22)+'" font-size="14" fill="white" text-anchor="middle" opacity="0.75" style="cursor:pointer">&#9881;</text>'
         + '</g>';
     }
-
-    s += '<rect x="'+pos.x+'" y="'+pos.y+'" width="'+W+'" height="'+HEADER_HEIGHT+'" fill="transparent" style="cursor:move" data-table="'+escXml(t.name)+'"/>';
 
     cols.forEach((col, i) => {
       const ry = pos.y + HEADER_HEIGHT + i * ROW_HEIGHT;
@@ -860,6 +879,15 @@
   let pendingIcon = null; // icon action captured on mousedown, fired on mouseup
 
   canvas.addEventListener('mousedown', e => {
+    // Middle mouse button → pan
+    if (e.button === 1) {
+      e.preventDefault();
+      panActive = true;
+      dragStartX = e.clientX; dragStartY = e.clientY;
+      dragViewX = viewX; dragViewY = viewY;
+      canvas.style.cursor = 'grabbing';
+      return;
+    }
     if (e.button !== 0) return;
     dragMoved = false;
     pendingIcon = null;
@@ -882,30 +910,55 @@
     // Prevent text selection during drag
     e.preventDefault();
 
-    // 1) Column area → FK drag (any column, including PKs as source; skip in read-only)
+    const tableHit = hitTestTable(pt.x, pt.y);
     const colHit = hitTestColumn(pt.x, pt.y);
-    if (colHit && !(typeof readOnly !== 'undefined' && readOnly)) {
-      colDrag = { fromTable: colHit.table, fromCol: colHit.column, curX: pt.x, curY: pt.y };
-      canvas.style.cursor = 'crosshair';
+
+    if (tableHit) {
+      const tpos = tablePositions[tableHit];
+
+      // Shift/Cmd+Click toggles multi-selection (anywhere on table)
+      if (e.shiftKey || e.metaKey) {
+        if (selectedTables.has(tableHit)) {
+          selectedTables.delete(tableHit);
+        } else {
+          selectedTables.add(tableHit);
+        }
+        scheduleRender();
+        return;
+      }
+
+      // Single click — select this table
+      if (!selectedTables.has(tableHit)) {
+        selectedTables.clear();
+        selectedTables.add(tableHit);
+        scheduleRender();
+      }
+
+      // If table is selected → drag from anywhere on the table body
+      // Only start FK colDrag if clicking an unselected table's column area
+      if (selectedTables.has(tableHit)) {
+        multiDragOffsets = {};
+        selectedTables.forEach(name => {
+          const p = tablePositions[name];
+          if (p) {
+            multiDragOffsets[name] = { dx: p.x - tpos.x, dy: p.y - tpos.y };
+          }
+        });
+        tableDrag = { name: tableHit, ox: pt.x - tpos.x, oy: pt.y - tpos.y };
+        canvas.style.cursor = 'grabbing';
+      } else if (colHit && !ro()) {
+        colDrag = { fromTable: colHit.table, fromCol: colHit.column, curX: pt.x, curY: pt.y };
+        canvas.style.cursor = 'crosshair';
+      }
       return;
     }
 
-    // 2) Table header → table drag
-    const tableHit = hitTestTable(pt.x, pt.y);
-    if (tableHit) {
-      const tpos = tablePositions[tableHit];
-      if (pt.y < tpos.y + HEADER_HEIGHT) {
-        tableDrag = { name: tableHit, ox: pt.x - tpos.x, oy: pt.y - tpos.y };
-        canvas.style.cursor = 'grabbing';
-        return;
-      }
+    // Empty space — prepare marquee (activated after threshold in mousemove)
+    if (!e.shiftKey && !e.metaKey) {
+      selectedTables.clear();
+      scheduleRender();
     }
-
-    // 3) Empty space → pan
-    panActive = true;
-    dragStartX = e.clientX; dragStartY = e.clientY;
-    dragViewX = viewX; dragViewY = viewY;
-    canvas.style.cursor = 'grabbing';
+    marqueePending = { x: pt.x, y: pt.y, sx: e.clientX, sy: e.clientY };
   });
 
   // ── Mousemove ──
@@ -923,6 +976,38 @@
       const newPos = { x: pt.x - tableDrag.ox, y: pt.y - tableDrag.oy };
       tablePositions[tableDrag.name] = newPos;
       collabSendDrag(tableDrag.name, newPos.x, newPos.y, false);
+      // Move other selected tables with the same delta
+      if (selectedTables.size > 0) {
+        selectedTables.forEach(name => {
+          if (name !== tableDrag.name && multiDragOffsets[name]) {
+            const off = multiDragOffsets[name];
+            const p = { x: newPos.x + off.dx, y: newPos.y + off.dy };
+            tablePositions[name] = p;
+            collabSendDrag(name, p.x, p.y, false);
+          }
+        });
+      }
+      scheduleRender();
+    } else if (marqueePending && !marquee) {
+      const dx = e.clientX - marqueePending.sx, dy = e.clientY - marqueePending.sy;
+      if (dx * dx + dy * dy >= 16) {
+        marquee = { x1: marqueePending.x, y1: marqueePending.y, x2: marqueePending.x, y2: marqueePending.y };
+        marqueePending = null;
+        canvas.style.cursor = 'crosshair';
+      }
+    } else if (marquee) {
+      dragMoved = true;
+      const pt = screenToSvg(e.clientX, e.clientY);
+      marquee.x2 = pt.x; marquee.y2 = pt.y;
+      const mx1 = Math.min(marquee.x1, marquee.x2), my1 = Math.min(marquee.y1, marquee.y2);
+      const mx2 = Math.max(marquee.x1, marquee.x2), my2 = Math.max(marquee.y1, marquee.y2);
+      selectedTables.clear();
+      (erData.tables || []).forEach(t => {
+        const p = tablePositions[t.name];
+        if (!p) return;
+        const tx2 = p.x + tw(t.name), ty2 = p.y + getTableHeight(t);
+        if (p.x < mx2 && tx2 > mx1 && p.y < my2 && ty2 > my1) selectedTables.add(t.name);
+      });
       scheduleRender();
     } else if (panActive) {
       dragMoved = true;
@@ -1014,10 +1099,24 @@
       if (dragMoved) {
         const pos = tablePositions[tableDrag.name];
         if (pos) collabSendDrag(tableDrag.name, pos.x, pos.y, true);
+        if (selectedTables.size > 0) {
+          selectedTables.forEach(name => {
+            if (name !== tableDrag.name) {
+              const p = tablePositions[name];
+              if (p) collabSendDrag(name, p.x, p.y, true);
+            }
+          });
+        }
         savePositions();
       }
+      multiDragOffsets = {};
       tableDrag = null;
       canvas.style.cursor = 'grab';
+    } else if (marquee || marqueePending) {
+      marquee = null;
+      marqueePending = null;
+      canvas.style.cursor = 'grab';
+      scheduleRender();
     } else if (panActive) {
       savePositions();
       panActive = false;
@@ -1088,7 +1187,7 @@
   // ── Cursor hint ──
 
   canvas.addEventListener('mousemove', function hoverCursor(e) {
-    if (tableDrag || panActive || colDrag) return;
+    if (tableDrag || marquee || colDrag) return;
     const pt = screenToSvg(e.clientX, e.clientY);
     collabSendCursor(pt.x, pt.y);
     const col = hitTestColumn(pt.x, pt.y);
@@ -1809,9 +1908,16 @@
       this.disabled = true; this.textContent = 'Creating...';
       try {
         await execSql(sql);
-        // Place new table near the click position
         const tblName = document.getElementById('erCtName').value.trim();
-        if (pos) { tablePositions[tblName] = { x: pos.x, y: pos.y }; savePositions(); }
+        // Pre-inject position into localStorage so loadER restores it at the right-click point
+        if (pos) {
+          try {
+            const raw = localStorage.getItem(storageKey());
+            const saved = raw ? JSON.parse(raw) : { v:1, layout: currentLayout, tables:{}, view:{x:viewX,y:viewY,scale:scale} };
+            saved.tables[tblName] = { x: Math.round(pos.x), y: Math.round(pos.y) };
+            localStorage.setItem(storageKey(), JSON.stringify(saved));
+          } catch(e) {}
+        }
         overlay.remove();
         showToast('Table created: ' + tblName, 'success');
         collabNotifySchemaChanged();
