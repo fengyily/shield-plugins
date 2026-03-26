@@ -8,9 +8,17 @@ PostgreSQL Web Client plugin for [Shield CLI](https://github.com/fengyily/shield
 - Execute SQL queries with syntax-aware results
 - Visual table/column/index management (create, drop)
 - Insert, edit, delete rows via Web UI
+- **Interactive ER Diagram** — visual schema explorer with drag-and-drop FK management
+  - SVG rendering with pan, zoom, and multiple layout modes (grid / horizontal / vertical / radial)
+  - Drag-and-drop foreign key creation with type matching and visual feedback
+  - Click-to-select and Delete key to remove FK relations
+  - Right-click context menus for table/column operations (rename, add, edit, delete)
+  - Table structure editor with live SQL preview
+  - Dynamic table width based on column content
+  - localStorage persistence for positions, zoom, and layout
 - Read-only mode with frontend + backend enforcement
 - CSV export, cell copy, column sorting
-- Single binary (~5 MB), zero external dependencies
+- Single binary (~6 MB), zero external dependencies
 
 ## Build
 
@@ -65,10 +73,11 @@ Open http://localhost:8080 — lightweight alternative to pgAdmin (~9 MB vs ~400
 
 The Web UI provides:
 
-- **Sidebar**: Schema → Table → Column/Index tree explorer
+- **Sidebar**: Schema → Table → Column/Index tree explorer, with quick ER Diagram entry per schema
 - **SQL Editor**: Multi-tab, Ctrl+Enter to execute, Tab indentation
 - **Results**: Sortable columns, cell copy, CSV export, row actions
 - **Structure Panel**: Column and index management with visual builders
+- **ER Diagram**: Interactive entity-relationship diagram with table/column/FK CRUD operations
 - **Modals**: Create schema, create table (visual column builder), create index, danger confirm with typed confirmation
 
 ## PostgreSQL-specific Adaptations
