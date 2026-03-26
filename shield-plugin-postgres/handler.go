@@ -343,6 +343,113 @@ func isWriteSQL(sql string) bool {
 	return false
 }
 
+// erHandler returns all tables with columns and foreign key relationships for ER diagram.
+// Query param: schema (default: public)
+func erHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		schema := r.URL.Query().Get("schema")
+		if schema == "" {
+			schema = "public"
+		}
+
+		// Get all tables with their columns
+		colRows, err := db.Query(`
+			SELECT c.table_name, c.column_name, c.data_type,
+				CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END AS is_pk
+			FROM information_schema.columns c
+			LEFT JOIN (
+				SELECT kcu.table_name, kcu.column_name
+				FROM information_schema.table_constraints tc
+				JOIN information_schema.key_column_usage kcu
+					ON tc.constraint_name = kcu.constraint_name
+					AND tc.table_schema = kcu.table_schema
+				WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_schema = $1
+			) pk ON c.table_name = pk.table_name AND c.column_name = pk.column_name
+			WHERE c.table_schema = $1
+			ORDER BY c.table_name, c.ordinal_position`, schema)
+		if err != nil {
+			writeError(w, 500, err.Error())
+			return
+		}
+		defer colRows.Close()
+
+		type ERColumn struct {
+			Name string `json:"name"`
+			Type string `json:"type"`
+			PK   bool   `json:"pk"`
+		}
+		type ERTable struct {
+			Name    string     `json:"name"`
+			Columns []ERColumn `json:"columns"`
+		}
+
+		tableMap := make(map[string]*ERTable)
+		var tableOrder []string
+
+		for colRows.Next() {
+			var tbl, col, dtype string
+			var pk bool
+			colRows.Scan(&tbl, &col, &dtype, &pk)
+
+			t, ok := tableMap[tbl]
+			if !ok {
+				t = &ERTable{Name: tbl}
+				tableMap[tbl] = t
+				tableOrder = append(tableOrder, tbl)
+			}
+			t.Columns = append(t.Columns, ERColumn{Name: col, Type: dtype, PK: pk})
+		}
+
+		var tables []ERTable
+		for _, name := range tableOrder {
+			tables = append(tables, *tableMap[name])
+		}
+
+		// Get foreign key relationships
+		fkRows, err := db.Query(`
+			SELECT
+				tc.constraint_name,
+				kcu.table_name AS from_table,
+				kcu.column_name AS from_column,
+				ccu.table_name AS to_table,
+				ccu.column_name AS to_column
+			FROM information_schema.table_constraints tc
+			JOIN information_schema.key_column_usage kcu
+				ON tc.constraint_name = kcu.constraint_name
+				AND tc.table_schema = kcu.table_schema
+			JOIN information_schema.constraint_column_usage ccu
+				ON tc.constraint_name = ccu.constraint_name
+				AND tc.table_schema = ccu.table_schema
+			WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = $1
+			ORDER BY kcu.table_name, kcu.column_name`, schema)
+		if err != nil {
+			writeError(w, 500, err.Error())
+			return
+		}
+		defer fkRows.Close()
+
+		type ERRelation struct {
+			Constraint string `json:"constraint"`
+			FromTable  string `json:"from_table"`
+			FromColumn string `json:"from_column"`
+			ToTable    string `json:"to_table"`
+			ToColumn   string `json:"to_column"`
+		}
+
+		var relations []ERRelation
+		for fkRows.Next() {
+			var rel ERRelation
+			fkRows.Scan(&rel.Constraint, &rel.FromTable, &rel.FromColumn, &rel.ToTable, &rel.ToColumn)
+			relations = append(relations, rel)
+		}
+
+		writeJSON(w, 200, map[string]interface{}{
+			"tables":    tables,
+			"relations": relations,
+		})
+	}
+}
+
 // quoteIdentifier wraps a PostgreSQL identifier in double quotes.
 func quoteIdentifier(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`

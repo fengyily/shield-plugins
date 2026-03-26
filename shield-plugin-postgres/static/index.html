@@ -428,6 +428,48 @@ table.schema-table tbody tr:hover td { background: var(--accent-light); }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+.er-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--bg); z-index: 300;
+  display: flex; flex-direction: column;
+}
+.er-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; border-bottom: 1px solid var(--border);
+  background: var(--bg); flex-shrink: 0;
+}
+.er-toolbar-left, .er-toolbar-right { display: flex; align-items: center; gap: 8px; }
+.er-schema-select {
+  padding: 5px 10px; border: 1px solid var(--border); border-radius: 4px;
+  font-size: 13px; background: var(--bg); color: var(--text); outline: none;
+}
+.er-schema-select:focus { border-color: var(--accent); }
+.er-info { font-size: 13px; color: var(--text2); }
+.er-canvas {
+  flex: 1; overflow: hidden; position: relative; cursor: grab;
+  background: var(--bg2);
+  background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.er-canvas:active { cursor: grabbing; }
+.er-canvas svg { position: absolute; top: 0; left: 0; }
+.er-ctx {
+  position: fixed; z-index: 500; min-width: 180px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  padding: 4px 0; font-size: 13px; user-select: none;
+}
+.er-ctx-item {
+  padding: 7px 14px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+  color: var(--text); white-space: nowrap;
+}
+.er-ctx-item:hover { background: var(--bg2); }
+.er-ctx-item.danger { color: #ef4444; }
+.er-ctx-item.danger:hover { background: #fef2f2; }
+.er-ctx-item.disabled { color: var(--text2); opacity: 0.5; pointer-events: none; }
+.er-ctx-sep { height: 1px; background: var(--border); margin: 4px 0; }
+.er-canvas [data-action]:hover { opacity: 1 !important; }
 </style>
 </head>
 <body>
@@ -473,6 +515,30 @@ table.schema-table tbody tr:hover td { background: var(--accent-light); }
       </div>
     </div>
   </div>
+</div>
+
+<div id="erOverlay" class="er-overlay" style="display:none;">
+  <div class="er-toolbar">
+    <div class="er-toolbar-left">
+      <select id="erSchemaSelect" class="er-schema-select" onchange="loadER()"></select>
+      <select id="erLayoutSelect" class="er-schema-select" onchange="erSetLayout(this.value)">
+        <option value="grid">Grid</option>
+        <option value="horizontal">Horizontal</option>
+        <option value="vertical">Vertical</option>
+        <option value="center">Center</option>
+      </select>
+      <span class="er-info" id="erInfo"></span>
+    </div>
+    <div class="er-toolbar-right">
+      <button class="btn btn-sm btn-secondary" onclick="erZoom(1.2)" title="Zoom In">&#43;</button>
+      <button class="btn btn-sm btn-secondary" onclick="erZoom(1/1.2)" title="Zoom Out">&#8722;</button>
+      <button class="btn btn-sm btn-secondary" onclick="erResetView()" title="Fit View">&#8634; Fit</button>
+      <button class="btn btn-sm btn-secondary" onclick="erClearLayout()" title="Clear saved layout and re-arrange">&#8635; Reset</button>
+      <button class="btn btn-sm btn-secondary" onclick="exportERSvg()" title="Export SVG">&#8615; SVG</button>
+      <button class="btn btn-sm btn-secondary" onclick="toggleER()">&#10005; Close</button>
+    </div>
+  </div>
+  <div class="er-canvas" id="erCanvas"></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -594,6 +660,7 @@ async function init() {
     const data = await resp.json();
     if (data.code === 200) {
       const info = data.data;
+      window._pgInfo = info;
       document.getElementById('serverInfo').innerHTML =
         `<span class="host">${esc(info.host)}</span> &middot; ${esc(info.database)} &middot; ${esc(info.user)}`;
       readOnly = !!info.readonly;
@@ -695,6 +762,7 @@ function renderTree() {
       <span class="node-label">${esc(schema)}</span>
       ${tableNames.length ? `<span class="node-badge">${tableNames.length}</span>` : ''}
       <span class="node-actions">
+        <button class="node-action-btn" onclick="event.stopPropagation();openER('${escAttr(schema)}')" title="ER Diagram">&#9701;</button>
         <button class="node-action-btn write-action" onclick="event.stopPropagation();showCreateTableModal('${escAttr(schema)}')" title="New Table">+</button>
         <button class="node-action-btn danger write-action" onclick="event.stopPropagation();dropSchema('${escAttr(schema)}')" title="Drop Schema">&#10005;</button>
       </span>
@@ -1941,5 +2009,6 @@ document.addEventListener('keydown', (e) => {
 
 init();
 </script>
+<script src="er.js"></script>
 </body>
 </html>

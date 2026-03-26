@@ -166,6 +166,7 @@ func setupHTTP(db *sql.DB, cfg PluginConfig) *http.ServeMux {
 	mux.HandleFunc("/api/indexes", indexesHandler(db))
 	mux.HandleFunc("/api/query", queryHandler(db, cfg.ReadOnly))
 	mux.HandleFunc("/api/info", infoHandler(db, cfg))
+	mux.HandleFunc("/api/er", erHandler(db))
 
 	staticSub, _ := fs.Sub(staticFS, "static")
 	mux.Handle("/", http.FileServer(http.FS(staticSub)))
