@@ -169,6 +169,7 @@ func setupHTTP(db *sql.DB, cfg PluginConfig, hub *CollabHub) *http.ServeMux {
 	mux.HandleFunc("/api/query", queryHandler(db, cfg.ReadOnly))
 	mux.HandleFunc("/api/info", infoHandler(db, cfg))
 	mux.HandleFunc("/api/er", erHandler(db))
+	mux.HandleFunc("/api/export", exportSQLHandler(db))
 	mux.HandleFunc("/ws/er", collabHandler(hub))
 
 	staticSub, _ := fs.Sub(staticFS, "static")

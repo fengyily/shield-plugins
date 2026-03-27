@@ -417,6 +417,16 @@ table.schema-table tbody tr:hover td { background: var(--accent-light); }
 }
 .toast.show { opacity: 1; transform: translateY(0); }
 
+.export-dropdown {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.12); overflow: hidden; min-width: 160px;
+}
+.export-dropdown-item {
+  padding: 7px 12px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;
+  color: var(--text);
+}
+.export-dropdown-item:hover { background: var(--bg-hover); }
+
 .loading {
   display: inline-block; width: 12px; height: 12px;
   border: 2px solid var(--border); border-top-color: var(--accent);
@@ -551,6 +561,7 @@ table.schema-table tbody tr:hover td { background: var(--accent-light); }
       <button class="btn btn-sm btn-secondary" onclick="erResetView()" title="Fit View">&#8634; Fit</button>
       <button class="btn btn-sm btn-secondary" onclick="erClearLayout()" title="Clear saved layout and re-arrange">&#8635; Reset</button>
       <button class="btn btn-sm btn-secondary" onclick="exportERSvg()" title="Export SVG">&#8615; SVG</button>
+      <button class="btn btn-sm btn-secondary" onclick="showExportMenu(document.getElementById('erSchemaSelect').value,null,this)" title="Export SQL">&#8615; SQL</button>
       <button class="btn btn-sm btn-secondary" onclick="toggleER()">&#10005; Close</button>
     </div>
   </div>
@@ -780,9 +791,10 @@ function renderTree() {
       <span class="node-label">${esc(schema)}</span>
       ${tableNames.length ? `<span class="node-badge">${tableNames.length}</span>` : ''}
       <span class="node-actions">
-        <button class="node-action-btn" onclick="event.stopPropagation();openER('${escAttr(schema)}')" title="ER Diagram">&#9701;</button>
-        <button class="node-action-btn write-action" onclick="event.stopPropagation();showCreateTableModal('${escAttr(schema)}')" title="New Table">+</button>
-        <button class="node-action-btn danger write-action" onclick="event.stopPropagation();dropSchema('${escAttr(schema)}')" title="Drop Schema">&#10005;</button>
+        <button class="node-action-btn" onclick="event.stopPropagation();openER('${escAttr(schema)}')" title="ER Diagram"><span style="display:inline-flex;width:14px;height:14px">${ICON.erDiagram}</span></button>
+        <button class="node-action-btn" onclick="event.stopPropagation();showExportMenu('${escAttr(schema)}',null,this)" title="Export SQL"><span style="display:inline-flex;width:14px;height:14px">${ICON.exportSql}</span></button>
+        <button class="node-action-btn write-action" onclick="event.stopPropagation();showCreateTableModal('${escAttr(schema)}')" title="New Table"><span style="display:inline-flex;width:14px;height:14px">${ICON.newTable}</span></button>
+        <button class="node-action-btn danger write-action" onclick="event.stopPropagation();dropSchema('${escAttr(schema)}')" title="Drop Schema"><span style="display:inline-flex;width:14px;height:14px">${ICON.dropSchema}</span></button>
       </span>
     `;
     schemaNode.onclick = () => toggleSchema(schema);
@@ -805,7 +817,8 @@ function renderTree() {
           <span class="node-actions">
             <button class="node-action-btn" onclick="event.stopPropagation();viewTableData('${escAttr(schema)}','${escAttr(table)}')" title="View Data">&#9776;</button>
             <button class="node-action-btn" onclick="event.stopPropagation();showStructPanel('${escAttr(schema)}','${escAttr(table)}')" title="View Structure">&#9881;</button>
-            <button class="node-action-btn danger write-action" onclick="event.stopPropagation();dropTable('${escAttr(schema)}','${escAttr(table)}')" title="Drop Table">&#10005;</button>
+            <button class="node-action-btn" onclick="event.stopPropagation();showExportMenu('${escAttr(schema)}','${escAttr(table)}',this)" title="Export SQL"><span style="display:inline-flex;width:13px;height:13px">${ICON.exportSql}</span></button>
+            <button class="node-action-btn danger write-action" onclick="event.stopPropagation();dropTable('${escAttr(schema)}','${escAttr(table)}')" title="Drop Table"><span style="display:inline-flex;width:13px;height:13px">${ICON.dropSchema}</span></button>
           </span>
         `;
         tableNode.onclick = () => toggleTable(schema, table);
@@ -1520,6 +1533,10 @@ const ICON = {
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
   download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
   clipboard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>',
+  erDiagram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="8" y="13" width="8" height="8" rx="2"/><line x1="11" y1="7" x2="13" y2="7"/><line x1="16" y1="11" x2="16" y2="13"/><line x1="8" y1="16" x2="11" y2="13"/></svg>',
+  exportSql: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16"/><path d="M6 10l6 6 6-6"/></svg>',
+  newTable: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>',
+  dropSchema: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="8" x2="16" y2="16"/><line x1="16" y1="8" x2="8" y2="16"/></svg>',
 };
 
 function renderResult() {
@@ -1555,6 +1572,7 @@ function renderResult() {
       ${canEdit ? `<button class="btn btn-sm btn-primary write-action" onclick="addNewRow()" style="gap:3px"><span style="display:inline-flex;width:14px;height:14px">${ICON.plus}</span> Insert</button>` : ''}
       <button class="btn btn-secondary btn-sm" onclick="copyAllResults()" style="gap:3px"><span style="display:inline-flex;width:13px;height:13px">${ICON.clipboard}</span> Copy All</button>
       <button class="btn btn-secondary btn-sm" onclick="exportCSV()" style="gap:3px"><span style="display:inline-flex;width:13px;height:13px">${ICON.download}</span> CSV</button>
+      ${_ctx ? `<button class="btn btn-secondary btn-sm" onclick="showExportMenu('${escAttr(_ctx.schema)}','${escAttr(_ctx.table)}',this)" style="gap:3px"><span style="display:inline-flex;width:13px;height:13px">${ICON.download}</span> SQL</button>` : ''}
     </div>
   </div>`;
 
@@ -1861,6 +1879,63 @@ function exportCSV() {
   a.click();
   URL.revokeObjectURL(a.href);
   showToast('CSV exported');
+}
+
+// ══════════════════════════════════════════════
+//  Export SQL
+// ══════════════════════════════════════════════
+async function exportSQL(schema, table, mode) {
+  let url = `/api/export?schema=${encodeURIComponent(schema)}&mode=${encodeURIComponent(mode)}`;
+  if (table) url += `&table=${encodeURIComponent(table)}`;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({message: resp.statusText}));
+      showToast('Export failed: ' + (err.message || resp.statusText), true);
+      return;
+    }
+    const sql = await resp.text();
+    const blob = new Blob([sql], {type: 'text/sql;charset=utf-8;'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const suffix = mode === 'all' ? 'structure_data' : 'structure';
+    const name = table ? `${schema}_${table}_${suffix}` : `${schema}_${suffix}`;
+    a.download = `${name}.sql`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('SQL exported');
+  } catch (e) {
+    showToast('Export failed: ' + e.message, true);
+  }
+}
+
+function showExportMenu(schema, table, btn) {
+  closeExportMenu();
+  const menu = document.createElement('div');
+  menu.className = 'export-dropdown';
+  menu.id = 'exportDropdown';
+  const label = table ? 'Table' : 'Schema';
+  const tArg = table ? `'${escAttr(table)}'` : 'null';
+  menu.innerHTML = `
+    <div class="export-dropdown-item" onclick="closeExportMenu();exportSQL('${escAttr(schema)}',${tArg},'structure')">
+      <span style="width:16px;display:inline-flex;opacity:.6">&#9638;</span> ${label} Structure
+    </div>
+    <div class="export-dropdown-item" onclick="closeExportMenu();exportSQL('${escAttr(schema)}',${tArg},'all')">
+      <span style="width:16px;display:inline-flex;opacity:.6">&#9776;</span> ${label} Structure + Data
+    </div>
+  `;
+  const rect = btn.getBoundingClientRect();
+  menu.style.position = 'fixed';
+  menu.style.top = (rect.bottom + 2) + 'px';
+  menu.style.left = rect.left + 'px';
+  menu.style.zIndex = '9999';
+  document.body.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', closeExportMenu, {once: true}), 0);
+}
+
+function closeExportMenu() {
+  const m = document.getElementById('exportDropdown');
+  if (m) m.remove();
 }
 
 // ══════════════════════════════════════════════
