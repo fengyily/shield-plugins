@@ -263,7 +263,7 @@ func (c *Client) readPump() {
 		msg.Schema = c.schema
 
 		switch msg.Type {
-		case "cursor", "drag":
+		case "cursor", "drag", "viewport":
 			// Forward to other clients in the same schema
 			stamped, _ := json.Marshal(msg)
 			c.hub.broadcastToSchema(c.schema, c, stamped)
