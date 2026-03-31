@@ -185,7 +185,7 @@ func handleStart(cfg PluginConfig) {
 		return
 	}
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := net.Listen("tcp", "0.0.0.0:0")
 	if err != nil {
 		db.Close()
 		respondError(fmt.Sprintf("failed to find available port: %v", err))
