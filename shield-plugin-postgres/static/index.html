@@ -495,6 +495,48 @@ table.schema-table tbody tr:hover td { background: var(--accent-light); }
 .er-ctx-item.disabled { color: var(--text2); opacity: 0.5; pointer-events: none; }
 .er-ctx-sep { height: 1px; background: var(--border); margin: 4px 0; }
 .er-canvas [data-action]:hover { opacity: 1 !important; }
+.er-icon-group {
+  display: flex; gap: 1px; background: var(--border); border-radius: 5px; overflow: hidden;
+}
+.er-icon-btn {
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  height: 26px; border: none; background: var(--bg);
+  color: var(--text3); cursor: pointer; transition: all 0.15s;
+  padding: 0 8px; font-size: 11px; font-family: -apple-system,BlinkMacSystemFont,sans-serif;
+  white-space: nowrap;
+}
+.er-icon-btn svg { flex-shrink: 0; }
+.er-icon-btn:hover { background: var(--bg2); color: var(--text); }
+.er-icon-btn.active { background: var(--accent); color: white; }
+.er-sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
+.er-group-label {
+  font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .5px;
+  font-weight: 600; font-family: -apple-system,BlinkMacSystemFont,sans-serif; flex-shrink: 0;
+}
+.er-search-wrap {
+  position: relative; display: flex; align-items: center; gap: 5px;
+  padding: 3px 8px; border: 1px solid var(--border); border-radius: 5px;
+  background: var(--bg); color: var(--text3); transition: border-color 0.15s;
+}
+.er-search-wrap:focus-within { border-color: var(--accent); color: var(--text); }
+.er-search-wrap input {
+  border: none; outline: none; background: transparent; font-size: 12px;
+  color: var(--text); width: 110px; font-family: -apple-system,BlinkMacSystemFont,sans-serif;
+}
+.er-search-wrap input::placeholder { color: var(--text3); }
+.er-search-results {
+  display: none; position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12); max-height: 200px; overflow-y: auto;
+  z-index: 510;
+}
+.er-search-results.open { display: block; }
+.er-search-item {
+  padding: 6px 10px; font-size: 12px; cursor: pointer; font-family: monospace;
+  color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.er-search-item:hover, .er-search-item.active { background: var(--bg2); }
+.er-search-item mark { background: #fef08a; color: inherit; border-radius: 2px; }
 </style>
 </head>
 <body>
@@ -546,16 +588,51 @@ table.schema-table tbody tr:hover td { background: var(--accent-light); }
   <div class="er-toolbar">
     <div class="er-toolbar-left">
       <select id="erSchemaSelect" class="er-schema-select" onchange="loadER(); if(window._collabSwitchSchema) window._collabSwitchSchema(this.value);"></select>
-      <select id="erLayoutSelect" class="er-schema-select" onchange="erSetLayout(this.value)">
-        <option value="grid">Grid</option>
-        <option value="horizontal">Horizontal</option>
-        <option value="vertical">Vertical</option>
-        <option value="center">Center</option>
-      </select>
+      <span class="er-group-label">Layout</span>
+      <div class="er-icon-group" id="erLayoutGroup">
+        <button class="er-icon-btn" data-layout="grid" onclick="erSetLayout('grid')" title="Grid layout">
+          <svg width="14" height="14" viewBox="0 0 16 16"><rect x="1" y="1" width="6" height="6" rx="1.5" fill="currentColor"/><rect x="9" y="1" width="6" height="6" rx="1.5" fill="currentColor"/><rect x="1" y="9" width="6" height="6" rx="1.5" fill="currentColor"/><rect x="9" y="9" width="6" height="6" rx="1.5" fill="currentColor"/></svg>
+          <span>Grid</span>
+        </button>
+        <button class="er-icon-btn" data-layout="horizontal" onclick="erSetLayout('horizontal')" title="Horizontal layers (left → right)">
+          <svg width="14" height="14" viewBox="0 0 16 16"><rect x="1" y="3" width="3.5" height="10" rx="1" fill="currentColor"/><rect x="6.25" y="3" width="3.5" height="10" rx="1" fill="currentColor"/><rect x="11.5" y="3" width="3.5" height="10" rx="1" fill="currentColor"/></svg>
+          <span>LR</span>
+        </button>
+        <button class="er-icon-btn" data-layout="vertical" onclick="erSetLayout('vertical')" title="Vertical layers (top → bottom)">
+          <svg width="14" height="14" viewBox="0 0 16 16"><rect x="3" y="1" width="10" height="3.5" rx="1" fill="currentColor"/><rect x="3" y="6.25" width="10" height="3.5" rx="1" fill="currentColor"/><rect x="3" y="11.5" width="10" height="3.5" rx="1" fill="currentColor"/></svg>
+          <span>TB</span>
+        </button>
+        <button class="er-icon-btn" data-layout="center" onclick="erSetLayout('center')" title="Radial layout from center hub">
+          <svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.5" fill="currentColor"/><circle cx="8" cy="2" r="1.5" fill="currentColor" opacity=".5"/><circle cx="13" cy="5.5" r="1.5" fill="currentColor" opacity=".5"/><circle cx="13" cy="11.5" r="1.5" fill="currentColor" opacity=".5"/><circle cx="8" cy="14" r="1.5" fill="currentColor" opacity=".5"/><circle cx="3" cy="11.5" r="1.5" fill="currentColor" opacity=".5"/><circle cx="3" cy="5.5" r="1.5" fill="currentColor" opacity=".5"/></svg>
+          <span>Radial</span>
+        </button>
+        <button class="er-icon-btn active" data-layout="relations" onclick="erSetLayout('relations')" title="FK-aligned layout (minimize crossings)">
+          <svg width="14" height="14" viewBox="0 0 16 16"><rect x="5.5" y="1" width="5" height="14" rx="1.2" fill="currentColor"/><rect x="0" y="2" width="4" height="5" rx="1" fill="currentColor" opacity=".5"/><rect x="12" y="2" width="4" height="5" rx="1" fill="currentColor" opacity=".5"/><rect x="0" y="9" width="4" height="5" rx="1" fill="currentColor" opacity=".5"/><rect x="12" y="9" width="4" height="5" rx="1" fill="currentColor" opacity=".5"/></svg>
+          <span>FK</span>
+        </button>
+      </div>
+      <span class="er-sep"></span>
+      <span class="er-group-label">Detail</span>
+      <div class="er-icon-group" id="erDisplayToggle">
+        <button class="er-icon-btn active" data-mode="compact" onclick="erSetDisplayMode('compact')" title="Compact — show key columns">
+          <svg width="14" height="14" viewBox="0 0 16 16"><rect x="2" y="1" width="12" height="3.5" rx="1.2" fill="currentColor"/><line x1="3.5" y1="6.5" x2="12.5" y2="6.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><line x1="3.5" y1="9" x2="12.5" y2="9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><line x1="3.5" y1="11.5" x2="12.5" y2="11.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity=".4"/><circle cx="8" cy="14" r=".8" fill="currentColor" opacity=".5"/><circle cx="10" cy="14" r=".8" fill="currentColor" opacity=".5"/><circle cx="6" cy="14" r=".8" fill="currentColor" opacity=".5"/></svg>
+          <span>Compact</span>
+        </button>
+        <button class="er-icon-btn" data-mode="name-only" onclick="erSetDisplayMode('name-only')" title="Name only — table headers">
+          <svg width="14" height="14" viewBox="0 0 16 16"><rect x="2" y="6" width="12" height="4" rx="1.2" fill="currentColor"/></svg>
+          <span>Minimal</span>
+        </button>
+      </div>
       <span class="er-info" id="erInfo"></span>
     </div>
     <div id="erCollabBar" class="er-collab-bar"></div>
     <div class="er-toolbar-right">
+      <div class="er-search-wrap" id="erSearchWrap">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="flex-shrink:0"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <input type="text" id="erSearchInput" placeholder="Find table..." spellcheck="false"
+          oninput="erSearchTable(this.value)" onkeydown="erSearchKey(event)">
+        <div class="er-search-results" id="erSearchResults"></div>
+      </div>
       <button class="btn btn-sm btn-secondary" onclick="erZoom(1.2)" title="Zoom In">&#43;</button>
       <button class="btn btn-sm btn-secondary" onclick="erZoom(1/1.2)" title="Zoom Out">&#8722;</button>
       <button class="btn btn-sm btn-secondary" onclick="erResetView()" title="Fit View">&#8634; Fit</button>
