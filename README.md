@@ -43,9 +43,15 @@ User runs: shield postgres 10.0.0.20 --db-user admin --db-pass ****
 - **SQL Editor** — Multi-tab SQL editor with syntax highlighting, result sorting, CSV export
 - **Schema Explorer** — Sidebar tree: Schema → Table → Columns / Indexes
 - **Table Management** — Create, rename, drop tables; add, edit, delete columns and indexes
-- **ER Diagram** — Interactive entity-relationship diagram with multiple layouts (grid, horizontal, vertical, center)
+- **ER Diagram** — Interactive entity-relationship diagram:
+  - **5 layout modes** — Grid, Horizontal (LR), Vertical (TB), Radial, FK-aligned (default, minimizes line crossings)
+  - **Focus mode** — Double-click a table to isolate its N-degree neighbors with FK-aligned relayout
+  - **Display modes** — Compact (default, max 8 columns) and Minimal (header only), per-table expandable
+  - **Hover highlight** — Hovering a table dims unrelated relation lines
+  - **Table search** — `Cmd/Ctrl+F` fuzzy search with keyboard navigation and viewport animation
   - Drag-and-drop FK creation between tables
   - Right-click context menus for table/column operations
+  - Responsive layout adapts to canvas size, auto-fits on window resize
   - Export to SVG
 - **Real-time Collaboration** — Multiple users can view and edit the same ER diagram simultaneously via WebSocket:
   - Live cursor tracking with colored name labels
@@ -230,7 +236,7 @@ You can test a plugin without Shield CLI by piping JSON to stdin:
 cd shield-plugin-postgres
 
 # Interactive mode (keeps running)
-(echo '{"action":"start","config":{"host":"127.0.0.1","port":5432,"user":"postgres","pass":"mypass","database":"postgres","readonly":false}}'; cat) | ./shield-plugin-postgres
+(echo '{"action":"start","config":{"host":"127.0.0.1","port":5432,"user":"appshield","pass":"appshield123","database":"casdoor","readonly":false}}'; cat) | ./shield-plugin-postgres
 
 # Plugin responds:
 # {"status":"ready","web_port":54321,"name":"PostgreSQL Web Client","version":"0.1.0"}

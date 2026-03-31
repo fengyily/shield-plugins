@@ -10,12 +10,16 @@ PostgreSQL Web Client plugin for [Shield CLI](https://github.com/fengyily/shield
 - 🎨 Visual table/column/index management (create, drop)
 - ✏️ Insert, edit, delete rows via Web UI
 - 📊 **Interactive ER Diagram** — visual schema explorer with drag-and-drop FK management
-  - SVG rendering with pan, zoom, and multiple layout modes (grid / horizontal / vertical / radial)
+  - SVG rendering with pan, zoom, and 5 layout modes (Grid, LR, TB, Radial, FK-aligned)
+  - **Focus mode** — double-click a table to isolate N-degree neighbors with FK-aligned relayout
+  - **Display modes** — Compact (max 8 columns) and Minimal (header only), per-table expandable
+  - **Hover highlight** — hovering a table dims unrelated relation lines
+  - **Table search** — `Cmd/Ctrl+F` fuzzy search with keyboard nav and viewport animation
   - Drag-and-drop foreign key creation with type matching and visual feedback
   - Click-to-select and Delete key to remove FK relations
   - Right-click context menus for table/column operations (rename, add, edit, delete)
   - Table structure editor with live SQL preview
-  - Dynamic table width based on column content
+  - Responsive layout adapts to canvas size, auto-fits on window resize
   - localStorage persistence for positions, zoom, and layout
 - 🔒 Read-only mode with frontend + backend enforcement
 - 📤 CSV export, cell copy, column sorting
