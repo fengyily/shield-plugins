@@ -1,0 +1,34 @@
+# See https://go.microsoft.com/fwlink/?LinkId=827846 to learn about workspace recommendations.
+
+# Extension
+.vscode-test
+
+# Dependencies
+node_modules/
+
+# Build output
+out/
+
+# Environment variables
+.env
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs
+*.log
+
+# Testing
+coverage/
+
+# Temporary files
+*.tmp
+*.temp

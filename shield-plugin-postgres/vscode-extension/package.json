@@ -1,0 +1,187 @@
+{
+  "name": "shield-postgresql",
+  "displayName": "Shield CLI PostgreSQL",
+  "description": "Shield CLI – PostgreSQL Web Client with ER Diagram and Collaboration Features for VS Code",
+  "version": "0.0.1",
+  "publisher": "ShieldCLI",
+  "engines": {
+    "vscode": "^1.107.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:shield-postgresql.views.postgresql",
+    "onCommand:shield-postgresql.connect",
+    "onCommand:shield-postgresql.addConnection",
+    "onCommand:shield-postgresql.removeConnection",
+    "onCommand:shield-postgresql.editConnection",
+    "onCommand:shield-postgresql.connectFromTree",
+    "onCommand:shield-postgresql.testConnection"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shield/shield-postgresql.git"
+  },
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "shield-postgresql",
+          "title": "Shield CLI",
+          "icon": "images/postgresql.svg"
+        }
+      ]
+    },
+    "views": {
+      "shield-postgresql": [
+        {
+          "id": "shield-postgresql.views.postgresql",
+          "name": "PostgreSQL Connections"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "shield-postgresql.connect",
+        "title": "Connect to PostgreSQL",
+        "category": "Shield CLI PostgreSQL"
+      },
+      {
+        "command": "shield-postgresql.addConnection",
+        "title": "Add Connection",
+        "category": "Shield CLI PostgreSQL"
+      },
+      {
+        "command": "shield-postgresql.removeConnection",
+        "title": "Remove Connection",
+        "category": "Shield CLI PostgreSQL"
+      },
+      {
+        "command": "shield-postgresql.editConnection",
+        "title": "Edit Connection",
+        "category": "Shield CLI PostgreSQL"
+      },
+      {
+        "command": "shield-postgresql.connectFromTree",
+        "title": "Connect",
+        "category": "Shield CLI PostgreSQL"
+      },
+
+      {
+        "command": "shield-postgresql.disconnect",
+        "title": "Disconnect",
+        "category": "Shield CLI PostgreSQL"
+      },
+      {
+        "command": "shield-postgresql.openInBrowser",
+        "title": "Open in Browser",
+        "category": "Shield CLI PostgreSQL"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "shield-postgresql.addConnection",
+          "when": "view == shield-postgresql.views.postgresql",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "shield-postgresql.connectFromTree",
+          "when": "viewItem == connection",
+          "group": "inline"
+        },
+        {
+          "command": "shield-postgresql.openInBrowser",
+          "when": "viewItem == connection || viewItem == connection.connected"
+        },
+
+        {
+          "command": "shield-postgresql.editConnection",
+          "when": "viewItem == connection"
+        },
+        {
+          "command": "shield-postgresql.disconnect",
+          "when": "viewItem == connection.connected"
+        },
+        {
+          "command": "shield-postgresql.removeConnection",
+          "when": "viewItem == connection"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "shield-postgresql.connect",
+          "group": "shield-postgresql"
+        }
+      ]
+    },
+
+    "configuration": {
+      "title": "Shield CLI PostgreSQL",
+      "properties": {
+        "shield-postgresql.host": {
+          "type": "string",
+          "default": "localhost",
+          "description": "PostgreSQL host"
+        },
+        "shield-postgresql.port": {
+          "type": "number",
+          "default": 5432,
+          "description": "PostgreSQL port"
+        },
+        "shield-postgresql.user": {
+          "type": "string",
+          "default": "postgres",
+          "description": "PostgreSQL user"
+        },
+        "shield-postgresql.password": {
+          "type": "string",
+          "default": "",
+          "description": "PostgreSQL password",
+          "scope": "application"
+        },
+        "shield-postgresql.database": {
+          "type": "string",
+          "default": "postgres",
+          "description": "PostgreSQL database"
+        },
+        "shield-postgresql.readonly": {
+          "type": "boolean",
+          "default": false,
+          "description": "Read-only mode"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build-binaries && npm run package",
+    "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vscode-test",
+    "build-binaries": "bash build-binaries.sh"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.107.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "typescript-eslint": "^8.56.1",
+    "eslint": "^9.39.3",
+    "esbuild": "^0.27.3",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.9.3",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2"
+  }
+}

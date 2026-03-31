@@ -1,0 +1,64 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- PostgreSQL Elephant Logo - Square -->
+  <g transform="translate(10, 2) scale(0.82)">
+    <!-- Elephant head main shape -->
+    <path d="M56 8C32 8 16 24 14 48C12 64 16 76 24 86C26 89 27 92 27 96L28 108C28 112 30 114 34 114L42 114C46 114 48 112 48 108L48 96C48 94 49 93 50 92L54 88C55 87 56 87 58 87L64 87C66 87 67 87 68 88L72 92C73 93 74 94 74 96L74 108C74 112 76 114 80 114L88 114C92 114 94 112 94 108L93 96C93 92 94 89 96 86C104 76 108 64 106 48C104 24 88 8 64 8Z" fill="#336791" stroke="#1A1A1A" stroke-width="2.5"/>
+
+    <!-- Inner ear left -->
+    <path d="M28 36C24 40 22 48 22 56C22 62 24 67 28 70" fill="none" stroke="#234B6E" stroke-width="2"/>
+
+    <!-- Inner ear right -->
+    <path d="M92 36C96 40 98 48 98 56C98 62 96 67 92 70" fill="none" stroke="#234B6E" stroke-width="2"/>
+
+    <!-- Forehead highlight -->
+    <path d="M40 20C48 14 68 14 78 20C84 24 88 32 88 42C88 48 86 52 82 56" fill="none" stroke="#4A82A8" stroke-width="1.5" opacity="0.5"/>
+
+    <!-- Left eye white -->
+    <ellipse cx="42" cy="44" rx="8" ry="10" fill="white" stroke="#1A1A1A" stroke-width="1.5"/>
+    <!-- Left eye pupil -->
+    <ellipse cx="44" cy="44" rx="3.5" ry="5" fill="#1A1A1A"/>
+    <!-- Left eye highlight -->
+    <ellipse cx="45.5" cy="42" rx="1.5" ry="2" fill="white"/>
+
+    <!-- Right eye white -->
+    <ellipse cx="76" cy="44" rx="8" ry="10" fill="white" stroke="#1A1A1A" stroke-width="1.5"/>
+    <!-- Right eye pupil -->
+    <ellipse cx="74" cy="44" rx="3.5" ry="5" fill="#1A1A1A"/>
+    <!-- Right eye highlight -->
+    <ellipse cx="75.5" cy="42" rx="1.5" ry="2" fill="white"/>
+
+    <!-- Trunk -->
+    <path d="M50 60C48 64 44 68 40 72C36 76 32 80 32 84C32 88 36 90 40 88C44 86 48 82 50 78" fill="#336791" stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round"/>
+
+    <!-- Trunk curl end -->
+    <path d="M40 88C38 90 38 92 40 93C42 94 44 92 44 90" fill="#336791" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round"/>
+
+    <!-- Trunk line detail -->
+    <path d="M48 62C46 66 42 70 38 74" fill="none" stroke="#234B6E" stroke-width="1" opacity="0.6"/>
+
+    <!-- Right tusk -->
+    <path d="M72 62C74 66 78 72 80 78C82 82 80 86 76 86C72 86 70 82 72 78" fill="white" stroke="#1A1A1A" stroke-width="1.5"/>
+
+    <!-- Mouth / smile line -->
+    <path d="M52 68C56 72 62 72 66 68" fill="none" stroke="#234B6E" stroke-width="1.5" stroke-linecap="round"/>
+
+    <!-- Left front leg detail -->
+    <path d="M34 108L34 114" stroke="#234B6E" stroke-width="1.5"/>
+    <path d="M42 108L42 114" stroke="#234B6E" stroke-width="1.5"/>
+
+    <!-- Right front leg detail -->
+    <path d="M80 108L80 114" stroke="#234B6E" stroke-width="1.5"/>
+    <path d="M88 108L88 114" stroke="#234B6E" stroke-width="1.5"/>
+
+    <!-- Feet -->
+    <ellipse cx="38" cy="115" rx="7" ry="3" fill="#2D5F84" stroke="#1A1A1A" stroke-width="1.5"/>
+    <ellipse cx="84" cy="115" rx="7" ry="3" fill="#2D5F84" stroke="#1A1A1A" stroke-width="1.5"/>
+
+    <!-- Tail -->
+    <path d="M56 8C52 4 48 2 44 4C40 6 40 10 42 12" fill="none" stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M42 12C44 14 44 16 42 17C40 18 38 17 38 15" fill="#336791" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round"/>
+  </g>
+
+  <!-- Shield CLI Text - single line, uniform style -->
+  <text x="64" y="120" font-family="'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="2" text-anchor="middle" fill="#336791">SHIELD CLI</text>
+</svg>
