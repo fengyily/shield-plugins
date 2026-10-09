@@ -180,23 +180,79 @@
     if (erData) { fitToView(); applySvgTransform(); collabSendViewport(); }
   };
 
-  window.exportERSvg = function() {
+  // Build a standalone, content-fitted SVG string shared by all export formats
+  function buildExportSvg() {
     const svg = document.querySelector('#erCanvas svg');
-    if (!svg) return;
+    if (!svg) return null;
+    const bb = getContentBounds();
+    if (bb.w === 0 || bb.h === 0) return null;
     const clone = svg.cloneNode(true);
     const g = clone.querySelector('g');
     if (g) g.removeAttribute('transform');
-    const bb = getContentBounds();
     const p = 30;
     clone.setAttribute('viewBox', (bb.x-p)+' '+(bb.y-p)+' '+(bb.w+p*2)+' '+(bb.h+p*2));
     clone.setAttribute('width', bb.w + p * 2);
     clone.setAttribute('height', bb.h + p * 2);
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    const blob = new Blob([clone.outerHTML], { type: 'image/svg+xml' });
+    clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+    return { svgString: clone.outerHTML, bb: bb, padding: p };
+  }
+
+  function triggerDownload(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'er-diagram.svg'; a.click();
-    URL.revokeObjectURL(url);
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  window.exportERSvg = function() {
+    const built = buildExportSvg();
+    if (!built) { showToast('Nothing to export', 'warning'); return; }
+    triggerDownload(new Blob([built.svgString], { type: 'image/svg+xml;charset=utf-8' }), 'er-diagram.svg');
+    showToast('SVG exported', 'success');
+  };
+
+  // Rasterize the diagram to PNG (transparent) or JPG (white background)
+  window.exportERImage = function(format) {
+    const built = buildExportSvg();
+    if (!built) { showToast('Nothing to export', 'warning'); return; }
+
+    const SCALE = 2;  // retina-sharp bitmap
+    const w = (built.bb.w + built.padding * 2) * SCALE;
+    const h = (built.bb.h + built.padding * 2) * SCALE;
+
+    const url = URL.createObjectURL(new Blob([built.svgString], { type: 'image/svg+xml;charset=utf-8' }));
+    const img = new Image();
+
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(w);
+      canvas.height = Math.ceil(h);
+      const ctx = canvas.getContext('2d');
+      if (format === 'jpg') {
+        ctx.fillStyle = '#ffffff';  // JPG has no alpha — force a white backdrop
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+
+      const mime = format === 'jpg' ? 'image/jpeg' : 'image/png';
+      const quality = format === 'jpg' ? 0.92 : undefined;  // ignored for PNG
+      canvas.toBlob(function(blob) {
+        if (!blob) { showToast('Export failed', 'error'); return; }
+        triggerDownload(blob, 'er-diagram.' + format);
+        showToast((format === 'jpg' ? 'JPG' : 'PNG') + ' exported', 'success');
+      }, mime, quality);
+    };
+
+    img.onerror = function() {
+      URL.revokeObjectURL(url);
+      showToast('Failed to render diagram', 'error');
+    };
+
+    img.src = url;
   };
 
   // ════════════════════════════════════════════
