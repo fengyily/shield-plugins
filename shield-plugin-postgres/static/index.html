@@ -637,7 +637,7 @@ table.schema-table tbody tr:hover td { background: var(--accent-light); }
       <button class="btn btn-sm btn-secondary" onclick="erZoom(1/1.2)" title="Zoom Out">&#8722;</button>
       <button class="btn btn-sm btn-secondary" onclick="erResetView()" title="Fit View">&#8634; Fit</button>
       <button class="btn btn-sm btn-secondary" onclick="erClearLayout()" title="Clear saved layout and re-arrange">&#8635; Reset</button>
-      <button class="btn btn-sm btn-secondary" onclick="exportERSvg()" title="Export SVG">&#8615; SVG</button>
+      <button class="btn btn-sm btn-secondary" onclick="showERExportMenu(this)" title="Export diagram (SVG / PNG / JPG)">&#8615; Export</button>
       <button class="btn btn-sm btn-secondary" onclick="showExportMenu(document.getElementById('erSchemaSelect').value,null,this)" title="Export SQL">&#8615; SQL</button>
       <button class="btn btn-sm btn-secondary" onclick="toggleER()">&#10005; Close</button>
     </div>
@@ -1988,6 +1988,7 @@ async function exportSQL(schema, table, mode) {
 
 function showExportMenu(schema, table, btn) {
   closeExportMenu();
+  closeERExportMenu();  // keep the two dropdowns mutually exclusive
   const menu = document.createElement('div');
   menu.className = 'export-dropdown';
   menu.id = 'exportDropdown';
@@ -2012,6 +2013,38 @@ function showExportMenu(schema, table, btn) {
 
 function closeExportMenu() {
   const m = document.getElementById('exportDropdown');
+  if (m) m.remove();
+}
+
+// ER diagram image export (SVG / PNG / JPG) — see exportERSvg/exportERImage in er.js
+function showERExportMenu(btn) {
+  closeExportMenu();  // keep the two dropdowns mutually exclusive
+  if (document.getElementById('erExportDropdown')) { closeERExportMenu(); return; }
+  const menu = document.createElement('div');
+  menu.className = 'export-dropdown';
+  menu.id = 'erExportDropdown';
+  menu.innerHTML = `
+    <div class="export-dropdown-item" onclick="closeERExportMenu();exportERSvg()">
+      <span style="width:16px;display:inline-flex;opacity:.6">&#9638;</span> SVG (vector)
+    </div>
+    <div class="export-dropdown-item" onclick="closeERExportMenu();exportERImage('png')">
+      <span style="width:16px;display:inline-flex;opacity:.6">&#9635;</span> PNG (2x, transparent)
+    </div>
+    <div class="export-dropdown-item" onclick="closeERExportMenu();exportERImage('jpg')">
+      <span style="width:16px;display:inline-flex;opacity:.6">&#9634;</span> JPG (2x, white)
+    </div>
+  `;
+  const rect = btn.getBoundingClientRect();
+  menu.style.position = 'fixed';
+  menu.style.top = (rect.bottom + 2) + 'px';
+  menu.style.left = rect.left + 'px';
+  menu.style.zIndex = '9999';
+  document.body.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', closeERExportMenu, {once: true}), 0);
+}
+
+function closeERExportMenu() {
+  const m = document.getElementById('erExportDropdown');
   if (m) m.remove();
 }
 

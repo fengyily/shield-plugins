@@ -2,7 +2,7 @@
   "name": "shield-postgresql",
   "displayName": "Shield CLI PostgreSQL",
   "description": "Shield CLI – PostgreSQL Web Client with ER Diagram and Collaboration Features for VS Code",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "ShieldCLI",
   "engines": {
     "vscode": "^1.107.0"

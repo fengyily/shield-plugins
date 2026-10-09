@@ -9,7 +9,7 @@ Shield CLI – PostgreSQL Web Client with ER Diagram and Collaboration Features 
 - 💻 Execute SQL queries with syntax-aware results
 - 🎨 Visual table/column/index management (create, drop)
 - ✏️ Insert, edit, delete rows via Web UI
-- 📊 **Interactive ER Diagram** — visual schema explorer with drag-and-drop FK management
+- 📊 **Interactive ER Diagram** — visual schema explorer with drag-and-drop FK management; export to SVG, PNG, or JPG
 - 🔒 Read-only mode with frontend + backend enforcement
 - 📤 CSV export, cell copy, column sorting
 - 🔌 Connection management (add, edit, remove connections)
@@ -85,6 +85,10 @@ npm test
 ```
 
 ## 📖 Release Notes
+
+### Version 0.1.2
+
+- ✅ PNG and JPG export for the ER Diagram (`Export` dropdown in the ER toolbar)
 
 ### Version 0.0.1 (Initial Release)
 
